@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>lore-reply</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f1ea;
+      --panel: #fffdfa;
+      --line: #d9d2c3;
+      --text: #1f1a17;
+      --muted: #75685d;
+      --accent: #9b2c2c;
+      --accent-soft: rgba(155, 44, 44, 0.12);
+      --editor-pad-x: 12px;
+      --editor-pad-y: 11px;
+      --editor-font-size: 14px;
+      --editor-line-height: 1.45;
+      --font: "SFMono-Regular", "Menlo", "Monaco", "Consolas", "Liberation Mono", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(155, 44, 44, 0.08), transparent 30%),
+        linear-gradient(180deg, #f8f4ec 0%, #f1ede4 100%);
+      color: var(--text);
+      font-family: var(--font);
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 20px 36px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 18px 40px rgba(42, 31, 21, 0.06);
+      padding: 20px;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    .header {
+      margin-bottom: 18px;
+    }
+
+    .header h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .toolbar,
+    .grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .toolbar {
+      grid-template-columns: minmax(0, 1fr) auto;
+      margin-bottom: 16px;
+      align-items: end;
+    }
+
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-bottom: 16px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .field-head {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .field-wide {
+      grid-column: 1 / -1;
+    }
+
+    .field-note {
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .info-badge {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border: 1px solid #c7beb1;
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      cursor: help;
+      font-size: 11px;
+      line-height: 1;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .info-badge::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 8px);
+      transform: translateX(-50%);
+      width: 240px;
+      padding: 10px 12px;
+      border: 1px solid #c7beb1;
+      border-radius: 10px;
+      background: #fffdfa;
+      color: var(--text);
+      box-shadow: 0 14px 28px rgba(24, 17, 10, 0.12);
+      opacity: 0;
+      pointer-events: none;
+      white-space: normal;
+      text-align: left;
+      text-transform: none;
+      letter-spacing: 0;
+      line-height: 1.45;
+      transition: opacity 120ms ease;
+      z-index: 10;
+    }
+
+    .info-badge:hover::after,
+    .info-badge:focus-visible::after {
+      opacity: 1;
+    }
+
+    input,
+    textarea,
+    button,
+    pre,
+    code {
+      font: inherit;
+      font-family: var(--font);
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid #c7beb1;
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      padding: var(--editor-pad-y) var(--editor-pad-x);
+      font-size: var(--editor-font-size);
+    }
+
+    input[readonly] {
+      background: #f7f4ed;
+    }
+
+    textarea {
+      min-height: 12rem;
+      height: 12rem;
+      line-height: var(--editor-line-height);
+      resize: vertical;
+      white-space: pre;
+      overflow-wrap: normal;
+      overflow-x: auto;
+      overflow-y: auto;
+      tab-size: 8;
+    }
+
+    .editor-shell {
+      margin-bottom: 16px;
+    }
+
+    .editor-surface {
+      position: relative;
+    }
+
+    .editor-surface textarea {
+      position: relative;
+      z-index: 1;
+    }
+
+    .recipient-board {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 88px;
+      border: 1px solid #c7beb1;
+      border-radius: 10px;
+      background: #fff;
+      padding: 12px;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+
+    .recipient-board.is-dragover {
+      border-color: var(--accent);
+      background: #fff5f2;
+    }
+
+    .recipient-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 24px;
+    }
+
+    .recipient-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      padding-top: 8px;
+      border-top: 1px dashed #d7cdbd;
+    }
+
+    .recipient-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #c7beb1;
+      border-radius: 999px;
+      background: #f8f4ec;
+      color: var(--text);
+      cursor: grab;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 12px;
+    }
+
+    .recipient-pill.is-dragging {
+      opacity: 0.55;
+    }
+
+    .recipient-value {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .recipient-remove {
+      border: 0;
+      padding: 0;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      line-height: 1;
+      transform: none;
+    }
+
+    .recipient-remove:hover {
+      background: rgba(31, 26, 23, 0.08);
+      transform: none;
+    }
+
+    .recipient-add {
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    .dialog-form {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .dialog-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .dialog-error {
+      min-height: 1.25rem;
+      color: #9b2c2c;
+      font-size: 12px;
+    }
+
+    .editor-actions {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      z-index: 3;
+    }
+
+    .ruler {
+      position: absolute;
+      top: calc(1px + var(--editor-pad-y));
+      bottom: calc(1px + var(--editor-pad-y));
+      left: calc(1px + var(--editor-pad-x) + 72ch);
+      width: 1px;
+      background: var(--accent);
+      opacity: 0.35;
+      pointer-events: none;
+      z-index: 2;
+      font-size: var(--editor-font-size);
+      line-height: var(--editor-line-height);
+      font-family: var(--font);
+    }
+
+    button {
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 11px 18px;
+      background: var(--text);
+      color: #fff;
+      cursor: pointer;
+      transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+    }
+
+    button.secondary {
+      background: #fff;
+      color: var(--text);
+      border-color: #c7beb1;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: wait;
+      transform: none;
+    }
+
+    .status {
+      min-height: 1.5rem;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .error {
+      display: none;
+      margin-top: 16px;
+      padding: 14px;
+      border: 1px solid rgba(155, 44, 44, 0.24);
+      border-radius: 10px;
+      background: var(--accent-soft);
+      color: #5f1b1b;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 13px;
+    }
+
+    dialog {
+      width: min(760px, calc(100vw - 32px));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 0;
+      box-shadow: 0 24px 60px rgba(24, 17, 10, 0.18);
+    }
+
+    dialog::backdrop {
+      background: rgba(20, 16, 12, 0.46);
+    }
+
+    .dialog-body {
+      padding: 20px;
+    }
+
+    .fullscreen-dialog {
+      width: calc(100vw - 24px);
+      max-width: none;
+      height: calc(100vh - 24px);
+      max-height: none;
+      background: #ebe7df;
+      border-color: rgba(86, 72, 57, 0.2);
+    }
+
+    .fullscreen-dialog .dialog-body {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding: 18px;
+      background: #ebe7df;
+    }
+
+    .fullscreen-note {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .fullscreen-editor {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: 100%;
+      resize: none;
+      background: #f4f0e8;
+      border-color: rgba(86, 72, 57, 0.24);
+    }
+
+    .body-preview {
+      padding-right: 116px;
+      padding-bottom: 64px;
+    }
+
+    .fullscreen-editor-shell {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+
+    .dialog-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .dialog-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .dialog-head h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .command {
+      margin: 0;
+      padding: 14px;
+      border-radius: 12px;
+      background: #16120f;
+      color: #f8f4ec;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 860px) {
+      .toolbar,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="panel">
+      <div class="header">
+        <h1>lore-reply</h1>
+        <p>Load one lore patch mail, edit the reply inline, save it into <code>/tmp/lore-reply/drafts/</code>, and run the generated <code>git send-email</code> command yourself.</p>
+      </div>
+
+      <div id="loadStage" class="toolbar">
+        <label class="field field-wide">
+          <span>Lore URL</span>
+          <input id="url" type="text" placeholder="https://lore.kernel.org/linux-mm/..." autocomplete="off" spellcheck="false">
+        </label>
+        <button id="loadButton" type="button">Load</button>
+      </div>
+
+      <div id="composer" hidden>
+        <div class="grid">
+          <label class="field">
+            <span class="field-head">
+              <span>From Name</span>
+              <span class="info-badge" tabindex="0" data-tooltip="Saved to local browser storage after a successful save so you do not need to re-enter it next time.">i</span>
+            </span>
+            <input id="fromName" type="text" value="{{ .DefaultFromName }}" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="field">
+            <span class="field-head">
+              <span>From Email</span>
+              <span class="info-badge" tabindex="0" data-tooltip="Saved to local browser storage after a successful save so you do not need to re-enter it next time.">i</span>
+            </span>
+            <input id="fromEmail" type="text" value="{{ .DefaultFromEmail }}" autocomplete="off" spellcheck="false">
+          </label>
+          <div class="field field-wide">
+            <span>To</span>
+            <span class="field-note">Drag recipients between To and Cc. Click empty space or Add recipient to add someone safely.</span>
+            <div id="toBoard" class="recipient-board" data-group="to">
+              <div id="toList" class="recipient-list"></div>
+              <div class="recipient-toolbar">
+                <button id="toAddButton" class="recipient-add secondary" type="button">Add recipient</button>
+              </div>
+            </div>
+            <input id="to" type="hidden">
+          </div>
+          <div class="field field-wide">
+            <span>Cc</span>
+            <div id="ccBoard" class="recipient-board" data-group="cc">
+              <div id="ccList" class="recipient-list"></div>
+              <div class="recipient-toolbar">
+                <button id="ccAddButton" class="recipient-add secondary" type="button">Add recipient</button>
+              </div>
+            </div>
+            <input id="cc" type="hidden">
+          </div>
+          <label class="field field-wide">
+            <span>Subject</span>
+            <input id="subject" type="text" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="field field-wide">
+            <span>Draft Path</span>
+            <input id="draftPath" type="text" readonly>
+          </label>
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <div class="editor-shell">
+          <label class="field">
+            <span>Body</span>
+            <span class="field-note">Click the body area to edit in full screen.</span>
+            <div class="editor-surface">
+              <div class="ruler" aria-hidden="true"></div>
+              <textarea id="body" class="body-preview" wrap="off" spellcheck="false" readonly></textarea>
+              <div class="editor-actions">
+                <button id="saveButton" type="button">Save</button>
+              </div>
+            </div>
+          </label>
+        </div>
+
+        <input id="messageId" type="hidden">
+      </div>
+
+      <pre id="errorOutput" class="error"></pre>
+    </section>
+  </main>
+
+  <dialog id="resultDialog">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2>Draft Saved</h2>
+        <div class="dialog-actions">
+          <button id="copyCommandButton" type="button">Copy Command</button>
+          <button id="closeDialogButton" type="button" class="secondary">Close</button>
+        </div>
+      </div>
+      <p>The draft was saved successfully. Run this command from your shell:</p>
+      <pre id="sendCommand" class="command"></pre>
+    </div>
+  </dialog>
+
+  <dialog id="recipientDialog">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2 id="recipientDialogTitle">Add Recipient</h2>
+        <button id="recipientCancelButton" type="button" class="secondary">Cancel</button>
+      </div>
+      <p>Add a recipient with a required email address and an optional display name.</p>
+      <div class="dialog-form">
+        <label class="dialog-field">
+          <span>Name</span>
+          <input id="recipientName" type="text" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="dialog-field">
+          <span>Email</span>
+          <input id="recipientEmail" type="email" autocomplete="off" spellcheck="false" required>
+        </label>
+        <div id="recipientError" class="dialog-error"></div>
+        <div class="dialog-actions">
+          <button id="recipientConfirmButton" type="button">Add Recipient</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="bodyDialog" class="fullscreen-dialog">
+    <div class="dialog-body">
+      <div class="dialog-head">
+        <h2>Body Editor</h2>
+        <div class="dialog-actions">
+          <button id="bodyDoneButton" type="button">Done</button>
+          <button id="bodyCloseButton" type="button" class="secondary">Close</button>
+        </div>
+      </div>
+      <p class="fullscreen-note">Edit the reply body in full screen. Changes are synced back to the main page immediately.</p>
+      <div class="editor-surface fullscreen-editor-shell">
+        <div class="ruler" aria-hidden="true"></div>
+        <textarea id="fullscreenBody" class="fullscreen-editor" wrap="off" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </dialog>
+
+  <script>
+    const elements = {
+      loadStage: document.getElementById("loadStage"),
+      composer: document.getElementById("composer"),
+      url: document.getElementById("url"),
+      fromName: document.getElementById("fromName"),
+      fromEmail: document.getElementById("fromEmail"),
+      to: document.getElementById("to"),
+      cc: document.getElementById("cc"),
+      toBoard: document.getElementById("toBoard"),
+      ccBoard: document.getElementById("ccBoard"),
+      toList: document.getElementById("toList"),
+      ccList: document.getElementById("ccList"),
+      toAddButton: document.getElementById("toAddButton"),
+      ccAddButton: document.getElementById("ccAddButton"),
+      subject: document.getElementById("subject"),
+      draftPath: document.getElementById("draftPath"),
+      body: document.getElementById("body"),
+      bodyDialog: document.getElementById("bodyDialog"),
+      fullscreenBody: document.getElementById("fullscreenBody"),
+      bodyDoneButton: document.getElementById("bodyDoneButton"),
+      bodyCloseButton: document.getElementById("bodyCloseButton"),
+      messageId: document.getElementById("messageId"),
+      loadButton: document.getElementById("loadButton"),
+      saveButton: document.getElementById("saveButton"),
+      status: document.getElementById("status"),
+      errorOutput: document.getElementById("errorOutput"),
+      resultDialog: document.getElementById("resultDialog"),
+      sendCommand: document.getElementById("sendCommand"),
+      copyCommandButton: document.getElementById("copyCommandButton"),
+      closeDialogButton: document.getElementById("closeDialogButton"),
+      recipientDialog: document.getElementById("recipientDialog"),
+      recipientDialogTitle: document.getElementById("recipientDialogTitle"),
+      recipientName: document.getElementById("recipientName"),
+      recipientEmail: document.getElementById("recipientEmail"),
+      recipientError: document.getElementById("recipientError"),
+      recipientConfirmButton: document.getElementById("recipientConfirmButton"),
+      recipientCancelButton: document.getElementById("recipientCancelButton")
+    };
+
+    const state = {
+      dirty: false,
+      hydrating: false,
+      dragging: null,
+      recipientTargetGroup: "to",
+      recipients: {
+        to: [],
+        cc: []
+      }
+    };
+
+    const storageKeys = {
+      fromName: "lore-reply.from-name",
+      fromEmail: "lore-reply.from-email"
+    };
+
+    function setStatus(message) {
+      elements.status.textContent = message;
+    }
+
+    function setLoadedState(loaded) {
+      elements.loadStage.hidden = loaded;
+      elements.composer.hidden = !loaded;
+    }
+
+    function clearError() {
+      elements.errorOutput.textContent = "";
+      elements.errorOutput.style.display = "none";
+    }
+
+    function showError(message) {
+      elements.errorOutput.textContent = message;
+      elements.errorOutput.style.display = "block";
+    }
+
+    function openBodyDialog() {
+      elements.fullscreenBody.value = elements.body.value;
+      if (typeof elements.bodyDialog.showModal === "function") {
+        elements.bodyDialog.showModal();
+      } else {
+        elements.bodyDialog.setAttribute("open", "open");
+      }
+      window.setTimeout(() => {
+        elements.fullscreenBody.focus();
+        elements.fullscreenBody.setSelectionRange(0, 0);
+        elements.fullscreenBody.scrollTop = 0;
+      }, 0);
+    }
+
+    function closeBodyDialog() {
+      if (typeof elements.bodyDialog.close === "function") {
+        elements.bodyDialog.close();
+      } else {
+        elements.bodyDialog.removeAttribute("open");
+      }
+    }
+
+    function setBusy(busy, action) {
+      elements.loadButton.disabled = busy;
+      elements.saveButton.disabled = busy;
+      setStatus(busy ? action : "");
+    }
+
+    function setCopyButtonLabel(label) {
+      elements.copyCommandButton.textContent = label;
+    }
+
+    function markDirty() {
+      if (state.hydrating) {
+        return;
+      }
+      state.dirty = true;
+    }
+
+    function setDirty(value) {
+      state.dirty = value;
+    }
+
+    function loadStoredIdentity() {
+      try {
+        const storedName = window.localStorage.getItem(storageKeys.fromName);
+        const storedEmail = window.localStorage.getItem(storageKeys.fromEmail);
+
+        if (storedName) {
+          elements.fromName.value = storedName;
+        }
+        if (storedEmail) {
+          elements.fromEmail.value = storedEmail;
+        }
+      } catch (_error) {
+      }
+    }
+
+    function storeIdentity() {
+      try {
+        window.localStorage.setItem(storageKeys.fromName, elements.fromName.value);
+        window.localStorage.setItem(storageKeys.fromEmail, elements.fromEmail.value);
+      } catch (_error) {
+      }
+    }
+
+    function clearRecipientDialog() {
+      elements.recipientName.value = "";
+      elements.recipientEmail.value = "";
+      elements.recipientError.textContent = "";
+    }
+
+    function openRecipientDialog(group) {
+      state.recipientTargetGroup = group;
+      elements.recipientDialogTitle.textContent = group === "to" ? "Add To Recipient" : "Add Cc Recipient";
+      clearRecipientDialog();
+
+      if (typeof elements.recipientDialog.showModal === "function") {
+        elements.recipientDialog.showModal();
+      } else {
+        elements.recipientDialog.setAttribute("open", "open");
+      }
+
+      window.setTimeout(() => elements.recipientEmail.focus(), 0);
+    }
+
+    function closeRecipientDialog() {
+      if (typeof elements.recipientDialog.close === "function") {
+        elements.recipientDialog.close();
+      } else {
+        elements.recipientDialog.removeAttribute("open");
+      }
+    }
+
+    function formatRecipient(name, email) {
+      name = name.trim();
+      email = email.trim();
+      if (!name) {
+        return email;
+      }
+      return `${name} <${email}>`;
+    }
+
+    function splitRecipientText(raw) {
+      const values = [];
+      let current = "";
+      let quoted = false;
+
+      for (const char of raw) {
+        if (char === "\"") {
+          quoted = !quoted;
+          current += char;
+          continue;
+        }
+
+        if (char === "," && !quoted) {
+          const value = current.trim();
+          if (value) {
+            values.push(value);
+          }
+          current = "";
+          continue;
+        }
+
+        current += char;
+      }
+
+      const tail = current.trim();
+      if (tail) {
+        values.push(tail);
+      }
+
+      return values;
+    }
+
+    function uniqueRecipients(values) {
+      const seen = new Set();
+      const result = [];
+
+      values.forEach((value) => {
+        const normalized = value.trim();
+        if (!normalized) {
+          return;
+        }
+        const key = normalized.toLowerCase();
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        result.push(normalized);
+      });
+
+      return result;
+    }
+
+    function syncRecipientFields() {
+      elements.to.value = state.recipients.to.join(", ");
+      elements.cc.value = state.recipients.cc.join(", ");
+    }
+
+    function renderRecipientGroup(group) {
+      const list = group === "to" ? elements.toList : elements.ccList;
+      list.textContent = "";
+
+      state.recipients[group].forEach((recipient, index) => {
+        const pill = document.createElement("div");
+        pill.className = "recipient-pill";
+        pill.draggable = true;
+        pill.dataset.group = group;
+        pill.dataset.index = String(index);
+
+        const value = document.createElement("span");
+        value.className = "recipient-value";
+        value.textContent = recipient;
+
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "recipient-remove";
+        removeButton.textContent = "×";
+        removeButton.addEventListener("click", (event) => {
+          event.stopPropagation();
+          state.recipients[group].splice(index, 1);
+          syncRecipientFields();
+          renderRecipientBoards();
+          markDirty();
+        });
+
+        pill.addEventListener("dragstart", (event) => {
+          state.dragging = { group, index, value: recipient };
+          pill.classList.add("is-dragging");
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", recipient);
+        });
+
+        pill.addEventListener("dragend", () => {
+          state.dragging = null;
+          pill.classList.remove("is-dragging");
+          elements.toBoard.classList.remove("is-dragover");
+          elements.ccBoard.classList.remove("is-dragover");
+        });
+
+        pill.append(value, removeButton);
+        list.appendChild(pill);
+      });
+    }
+
+    function renderRecipientBoards() {
+      renderRecipientGroup("to");
+      renderRecipientGroup("cc");
+    }
+
+    function moveRecipient(targetGroup) {
+      if (!state.dragging) {
+        return;
+      }
+
+      const { group, index, value } = state.dragging;
+      if (group === targetGroup) {
+        return;
+      }
+
+      state.recipients[group].splice(index, 1);
+      state.recipients[targetGroup].push(value);
+      state.recipients[targetGroup] = uniqueRecipients(state.recipients[targetGroup]);
+      syncRecipientFields();
+      renderRecipientBoards();
+      markDirty();
+    }
+
+    function addRecipients(group, values) {
+      const next = uniqueRecipients(state.recipients[group].concat(values));
+      state.recipients[group] = next;
+      syncRecipientFields();
+      renderRecipientBoards();
+      markDirty();
+    }
+
+    function bindRecipientBoard(board, group) {
+      board.addEventListener("click", (event) => {
+        if (event.target.closest(".recipient-pill") || event.target.closest(".recipient-remove") || event.target.closest(".recipient-add")) {
+          return;
+        }
+        openRecipientDialog(group);
+      });
+
+      board.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        board.classList.add("is-dragover");
+      });
+
+      board.addEventListener("dragleave", (event) => {
+        if (board.contains(event.relatedTarget)) {
+          return;
+        }
+        board.classList.remove("is-dragover");
+      });
+
+      board.addEventListener("drop", (event) => {
+        event.preventDefault();
+        board.classList.remove("is-dragover");
+        moveRecipient(group);
+      });
+    }
+
+    function hydrateDraft(draft) {
+      state.hydrating = true;
+      elements.fromName.value = draft.from_name || elements.fromName.value;
+      elements.fromEmail.value = draft.from_email || elements.fromEmail.value;
+      state.recipients.to = splitRecipientText(draft.to || "");
+      state.recipients.cc = splitRecipientText(draft.cc || "");
+      syncRecipientFields();
+      renderRecipientBoards();
+      elements.subject.value = draft.subject || "";
+      elements.body.value = draft.body || "";
+      elements.fullscreenBody.value = draft.body || "";
+      elements.messageId.value = draft.message_id || "";
+      elements.draftPath.value = draft.draft_path || "";
+      state.hydrating = false;
+      setDirty(false);
+    }
+
+    function currentDraft() {
+      return {
+        from_name: elements.fromName.value,
+        from_email: elements.fromEmail.value,
+        to: elements.to.value,
+        cc: elements.cc.value,
+        subject: elements.subject.value,
+        body: elements.body.value,
+        message_id: elements.messageId.value,
+        draft_path: elements.draftPath.value
+      };
+    }
+
+    async function copySendCommand() {
+      const text = elements.sendCommand.textContent;
+      if (!text) {
+        return;
+      }
+
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(elements.sendCommand);
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      try {
+        document.execCommand("copy");
+      } finally {
+        selection.removeAllRanges();
+      }
+    }
+
+    async function postJSON(url, payload) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Request failed");
+      }
+      return data;
+    }
+
+    elements.loadButton.addEventListener("click", async () => {
+      clearError();
+      setBusy(true, "Loading draft...");
+      try {
+        const draft = await postJSON("/api/load", {
+          url: elements.url.value,
+          from_name: elements.fromName.value,
+          from_email: elements.fromEmail.value
+        });
+        hydrateDraft(draft);
+        setLoadedState(true);
+        setStatus("Draft loaded.");
+      } catch (error) {
+        showError(String(error.message || error));
+        setStatus("");
+      } finally {
+        setBusy(false, "");
+      }
+    });
+
+    elements.saveButton.addEventListener("click", async () => {
+      clearError();
+      setBusy(true, "Saving draft...");
+      try {
+        const result = await postJSON("/api/save", currentDraft());
+        elements.draftPath.value = result.draft_path || elements.draftPath.value;
+        elements.sendCommand.textContent = result.send_command || "";
+        setCopyButtonLabel("Copy Command");
+        storeIdentity();
+        setDirty(false);
+        setStatus("Draft saved.");
+        if (typeof elements.resultDialog.showModal === "function") {
+          elements.resultDialog.showModal();
+        } else {
+          elements.resultDialog.setAttribute("open", "open");
+        }
+      } catch (error) {
+        showError(String(error.message || error));
+        setStatus("");
+      } finally {
+        setBusy(false, "");
+      }
+    });
+
+    elements.closeDialogButton.addEventListener("click", () => {
+      elements.resultDialog.close();
+    });
+
+    elements.copyCommandButton.addEventListener("click", async () => {
+      try {
+        await copySendCommand();
+        setCopyButtonLabel("Copied");
+      } catch (_error) {
+        setCopyButtonLabel("Copy Failed");
+      }
+    });
+
+    [elements.url, elements.fromName, elements.fromEmail, elements.subject, elements.body].forEach((field) => {
+      field.addEventListener("input", markDirty);
+    });
+
+    elements.body.addEventListener("click", openBodyDialog);
+    elements.body.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openBodyDialog();
+      }
+    });
+    elements.body.addEventListener("focus", () => {
+      elements.body.blur();
+    });
+    elements.fullscreenBody.addEventListener("input", () => {
+      elements.body.value = elements.fullscreenBody.value;
+      markDirty();
+    });
+    elements.bodyDoneButton.addEventListener("click", closeBodyDialog);
+    elements.bodyCloseButton.addEventListener("click", closeBodyDialog);
+
+    bindRecipientBoard(elements.toBoard, "to");
+    bindRecipientBoard(elements.ccBoard, "cc");
+    elements.toAddButton.addEventListener("click", () => openRecipientDialog("to"));
+    elements.ccAddButton.addEventListener("click", () => openRecipientDialog("cc"));
+    elements.recipientCancelButton.addEventListener("click", closeRecipientDialog);
+    elements.recipientConfirmButton.addEventListener("click", () => {
+      const name = elements.recipientName.value;
+      const email = elements.recipientEmail.value.trim();
+
+      if (!email) {
+        elements.recipientError.textContent = "Email is required.";
+        elements.recipientEmail.focus();
+        return;
+      }
+
+      if (!elements.recipientEmail.checkValidity()) {
+        elements.recipientError.textContent = "Enter a valid email address.";
+        elements.recipientEmail.focus();
+        return;
+      }
+
+      addRecipients(state.recipientTargetGroup, [formatRecipient(name, email)]);
+      closeRecipientDialog();
+    });
+    [elements.recipientName, elements.recipientEmail].forEach((field) => {
+      field.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          elements.recipientConfirmButton.click();
+        }
+      });
+      field.addEventListener("input", () => {
+        elements.recipientError.textContent = "";
+      });
+    });
+
+    loadStoredIdentity();
+    setLoadedState(false);
+
+    window.addEventListener("beforeunload", (event) => {
+      if (!state.dirty) {
+        return;
+      }
+      event.preventDefault();
+      event.returnValue = "";
+    });
+  </script>
+</body>
+</html>
