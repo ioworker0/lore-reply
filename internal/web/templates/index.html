@@ -368,6 +368,19 @@
       font-size: 13px;
     }
 
+    .autosave-status {
+      min-height: 1.4rem;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .autosave-status.fullscreen {
+      margin: 10px 0 0;
+      padding: 0 2px;
+    }
+
     .error {
       display: none;
       margin-top: 16px;
@@ -557,6 +570,7 @@
               </div>
             </div>
           </label>
+          <div id="autosaveStatus" class="autosave-status" aria-live="polite"></div>
         </div>
 
         <input id="messageId" type="hidden">
@@ -609,7 +623,6 @@
       <div class="dialog-head">
         <h2>Body Editor</h2>
         <div class="dialog-actions">
-          <button id="bodyDoneButton" type="button">Done</button>
           <button id="bodyCloseButton" type="button" class="secondary">Close</button>
         </div>
       </div>
@@ -618,10 +631,14 @@
         <div class="ruler" aria-hidden="true"></div>
         <textarea id="fullscreenBody" class="fullscreen-editor" wrap="off" spellcheck="false"></textarea>
       </div>
+      <div id="fullscreenAutosaveStatus" class="autosave-status fullscreen" aria-live="polite"></div>
     </div>
   </dialog>
 
   <script>
+    const autoSaveDelayMs = 5000;
+    const heartbeatIntervalMs = 5000;
+
     const elements = {
       loadStage: document.getElementById("loadStage"),
       composer: document.getElementById("composer"),
@@ -641,12 +658,13 @@
       body: document.getElementById("body"),
       bodyDialog: document.getElementById("bodyDialog"),
       fullscreenBody: document.getElementById("fullscreenBody"),
-      bodyDoneButton: document.getElementById("bodyDoneButton"),
       bodyCloseButton: document.getElementById("bodyCloseButton"),
       messageId: document.getElementById("messageId"),
       loadButton: document.getElementById("loadButton"),
       saveButton: document.getElementById("saveButton"),
       status: document.getElementById("status"),
+      autosaveStatus: document.getElementById("autosaveStatus"),
+      fullscreenAutosaveStatus: document.getElementById("fullscreenAutosaveStatus"),
       errorOutput: document.getElementById("errorOutput"),
       resultDialog: document.getElementById("resultDialog"),
       sendCommand: document.getElementById("sendCommand"),
@@ -664,6 +682,14 @@
     const state = {
       dirty: false,
       hydrating: false,
+      loading: false,
+      saving: false,
+      saveMode: "",
+      changeSerial: 0,
+      nextAutoSaveAt: 0,
+      lastAutoSaveAt: 0,
+      lastAutoSaveError: "",
+      lastHeartbeatAt: 0,
       dragging: null,
       recipientTargetGroup: "to",
       recipients: {
@@ -679,6 +705,11 @@
 
     function setStatus(message) {
       elements.status.textContent = message;
+    }
+
+    function setAutosaveStatus(message) {
+      elements.autosaveStatus.textContent = message;
+      elements.fullscreenAutosaveStatus.textContent = message;
     }
 
     function setLoadedState(loaded) {
@@ -732,11 +763,67 @@
       if (state.hydrating) {
         return;
       }
+      state.changeSerial += 1;
       state.dirty = true;
+      state.lastAutoSaveError = "";
+      state.nextAutoSaveAt = Date.now() + autoSaveDelayMs;
+      updateAutosaveStatus();
     }
 
     function setDirty(value) {
       state.dirty = value;
+      if (!value) {
+        state.nextAutoSaveAt = 0;
+      }
+      updateAutosaveStatus();
+    }
+
+    function formatClockTime(timestamp) {
+      return new Date(timestamp).toLocaleTimeString([], {
+        hour12: false
+      });
+    }
+
+    function autosaveSecondsRemaining(now) {
+      if (!state.nextAutoSaveAt) {
+        return 0;
+      }
+      return Math.max(0, Math.ceil((state.nextAutoSaveAt - now) / 1000));
+    }
+
+    function updateAutosaveStatus() {
+      if (!elements.messageId.value) {
+        setAutosaveStatus("");
+        return;
+      }
+
+      if (state.saveMode === "auto") {
+        setAutosaveStatus("Auto-saving...");
+        return;
+      }
+
+      if (state.saveMode === "manual") {
+        setAutosaveStatus("Saving...");
+        return;
+      }
+
+      const now = Date.now();
+      if (state.dirty) {
+        const seconds = autosaveSecondsRemaining(now);
+        if (state.lastAutoSaveError) {
+          setAutosaveStatus(`Auto-save failed. Retry in ${seconds}s.`);
+          return;
+        }
+        setAutosaveStatus(`Unsaved changes. Auto-save in ${seconds}s.`);
+        return;
+      }
+
+      if (state.lastAutoSaveAt) {
+        setAutosaveStatus(`Last save at ${formatClockTime(state.lastAutoSaveAt)}.`);
+        return;
+      }
+
+      setAutosaveStatus("All changes saved.");
     }
 
     function loadStoredIdentity() {
@@ -974,6 +1061,10 @@
       elements.messageId.value = draft.message_id || "";
       elements.draftPath.value = draft.draft_path || "";
       state.hydrating = false;
+      state.changeSerial = 0;
+      state.lastAutoSaveAt = 0;
+      state.lastAutoSaveError = "";
+      state.saveMode = "";
       setDirty(false);
     }
 
@@ -1030,7 +1121,37 @@
       return data;
     }
 
+    async function sendHeartbeat() {
+      if (Date.now() - state.lastHeartbeatAt < heartbeatIntervalMs) {
+        return;
+      }
+
+      state.lastHeartbeatAt = Date.now();
+      try {
+        await fetch("/api/heartbeat", {
+          method: "POST",
+          keepalive: true
+        });
+      } catch (_error) {
+      }
+    }
+
+    function sendSaveBeacon() {
+      if (!state.dirty || !elements.messageId.value || !navigator.sendBeacon) {
+        return;
+      }
+
+      const payload = JSON.stringify(currentDraft());
+      const body = new Blob([payload], { type: "application/json" });
+      navigator.sendBeacon("/api/save", body);
+    }
+
     async function loadDraft() {
+      if (state.loading || state.saving) {
+        return;
+      }
+
+      state.loading = true;
       clearError();
       setBusy(true, "Loading draft...");
       try {
@@ -1046,34 +1167,89 @@
         showError(String(error.message || error));
         setStatus("");
       } finally {
+        state.loading = false;
         setBusy(false, "");
       }
     }
 
     elements.loadButton.addEventListener("click", loadDraft);
 
-    elements.saveButton.addEventListener("click", async () => {
-      clearError();
-      setBusy(true, "Saving draft...");
+    async function saveDraft(options) {
+      const interactive = Boolean(options && options.interactive);
+      const showDialog = Boolean(options && options.showDialog);
+      const saveMode = interactive ? "manual" : "auto";
+
+      if (state.loading || state.saving || !elements.messageId.value) {
+        return null;
+      }
+
+      state.saving = true;
+      state.saveMode = saveMode;
+      const snapshotSerial = state.changeSerial;
+      updateAutosaveStatus();
+
+      if (interactive) {
+        clearError();
+        setBusy(true, "Saving draft...");
+      }
+
       try {
         const result = await postJSON("/api/save", currentDraft());
         elements.draftPath.value = result.draft_path || elements.draftPath.value;
         elements.sendCommand.textContent = result.send_command || "";
         setCopyButtonLabel("Copy Command");
         storeIdentity();
-        setDirty(false);
-        setStatus("Draft saved.");
-        if (typeof elements.resultDialog.showModal === "function") {
-          elements.resultDialog.showModal();
-        } else {
-          elements.resultDialog.setAttribute("open", "open");
+
+        if (state.changeSerial === snapshotSerial) {
+          state.lastAutoSaveAt = Date.now();
+          state.lastAutoSaveError = "";
+          setDirty(false);
         }
+
+        if (interactive) {
+          setStatus("Draft saved.");
+        }
+
+        if (showDialog) {
+          if (typeof elements.resultDialog.showModal === "function") {
+            elements.resultDialog.showModal();
+          } else {
+            elements.resultDialog.setAttribute("open", "open");
+          }
+        }
+
+        return result;
       } catch (error) {
         showError(String(error.message || error));
-        setStatus("");
+        if (!interactive) {
+          state.lastAutoSaveError = String(error.message || error);
+          state.nextAutoSaveAt = Date.now() + autoSaveDelayMs;
+          updateAutosaveStatus();
+        }
+        if (interactive) {
+          setStatus("");
+        }
+        return null;
       } finally {
-        setBusy(false, "");
+        state.saving = false;
+        state.saveMode = "";
+        updateAutosaveStatus();
+        if (interactive) {
+          setBusy(false, "");
+        }
       }
+    }
+
+    async function autoSaveDraft() {
+      if (!state.dirty || !elements.messageId.value || Date.now() < state.nextAutoSaveAt) {
+        return;
+      }
+
+      await saveDraft({ interactive: false, showDialog: false });
+    }
+
+    elements.saveButton.addEventListener("click", async () => {
+      await saveDraft({ interactive: true, showDialog: true });
     });
 
     elements.closeDialogButton.addEventListener("click", () => {
@@ -1107,7 +1283,6 @@
       elements.body.value = elements.fullscreenBody.value;
       markDirty();
     });
-    elements.bodyDoneButton.addEventListener("click", closeBodyDialog);
     elements.bodyCloseButton.addEventListener("click", closeBodyDialog);
 
     bindRecipientBoard(elements.toBoard, "to");
@@ -1148,6 +1323,14 @@
 
     loadStoredIdentity();
     setLoadedState(false);
+    updateAutosaveStatus();
+
+    window.setInterval(() => {
+      void sendHeartbeat();
+      void autoSaveDraft();
+      updateAutosaveStatus();
+    }, 1000);
+    void sendHeartbeat();
 
     if (elements.url.value.trim()) {
       window.setTimeout(() => {
@@ -1162,6 +1345,7 @@
       event.preventDefault();
       event.returnValue = "";
     });
+    window.addEventListener("pagehide", sendSaveBeacon);
   </script>
 </body>
 </html>

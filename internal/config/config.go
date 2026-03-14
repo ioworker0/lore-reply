@@ -24,6 +24,7 @@ type Config struct {
 	Listen      string
 	DraftsDir   string
 	AutoLoadURL string
+	ExitOnIdle  bool
 }
 
 // Load parses flags, validates dependencies, and returns the runtime config.
@@ -34,6 +35,7 @@ func Load() (Config, error) {
 		fromEmail   = flag.String("from-email", defaultFromEmail, "default sender email")
 		listen      = flag.String("listen", defaultListen, "listen address")
 		autoLoadURL = flag.String("url", "", "lore URL to open and load automatically on startup")
+		exitOnIdle  = flag.Bool("exit-on-idle", false, "stop the server after the page heartbeat disappears")
 	)
 
 	flag.Parse()
@@ -59,6 +61,7 @@ func Load() (Config, error) {
 		Listen:      *listen,
 		DraftsDir:   draftsDir,
 		AutoLoadURL: *autoLoadURL,
+		ExitOnIdle:  *exitOnIdle,
 	}, nil
 }
 

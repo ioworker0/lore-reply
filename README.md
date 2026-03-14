@@ -18,6 +18,8 @@ It uses `b4` to fetch one target message, turns it into an editable plain-text r
 - Stable draft path generated from `Message-ID` and subject
 - Save result dialog with a copy button for the generated `git send-email` command
 - `From Name` and `From Email` are saved in local browser storage after a successful save
+- Optional idle-exit mode driven by page heartbeat
+- Automatic draft save every 5 seconds while there are unsaved changes
 
 ## Scope
 
@@ -79,6 +81,7 @@ Available flags:
 --from-email
 --listen
 --url
+--exit-on-idle
 ```
 
 Example:
@@ -89,7 +92,8 @@ Example:
   --from-name "Your Name" \
   --from-email "you@example.com" \
   --listen 127.0.0.1:9110 \
-  --url "https://lore.kernel.org/linux-mm/..."
+  --url "https://lore.kernel.org/linux-mm/..." \
+  --exit-on-idle
 ```
 
 Then open:
@@ -99,6 +103,8 @@ http://127.0.0.1:9110
 ```
 
 If `--url` is provided, `lore-reply` opens the browser on startup and automatically runs the page `Load` step for that URL.
+
+If `--exit-on-idle` is also provided, the page sends a heartbeat every 5 seconds and the server shuts down automatically after the heartbeat disappears for a short idle window.
 
 ## Workflow
 
@@ -130,3 +136,4 @@ The same loaded draft overwrites the same file on repeated saves.
 - The quoted original mail is part of the editable body.
 - `b4` errors are shown directly in the page without extra translation.
 - The app binds to localhost by default and is meant to be used as a local tool.
+- When a loaded draft is dirty, the page auto-saves it to disk every 5 seconds.

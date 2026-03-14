@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+)
 
 func TestBrowserURL(t *testing.T) {
 	t.Parallel()
@@ -37,5 +42,25 @@ func TestBrowserURL(t *testing.T) {
 				t.Fatalf("unexpected browser URL:\nwant: %s\ngot:  %s", test.want, got)
 			}
 		})
+	}
+}
+
+func TestWithIdleSupportHeartbeat(t *testing.T) {
+	t.Parallel()
+
+	tracker := newIdleTracker(true)
+	handler := withIdleSupport(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		t.Fatal("heartbeat request should not reach the wrapped handler")
+	}), tracker)
+
+	request := httptest.NewRequest(http.MethodPost, heartbeatPath, nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if tracker.IdleFor(time.Now()) > time.Second {
+		t.Fatalf("heartbeat did not refresh tracker activity")
 	}
 }

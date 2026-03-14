@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -8,10 +9,18 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ioworker0/lore-reply/internal/config"
 	"github.com/ioworker0/lore-reply/internal/web"
+)
+
+const (
+	heartbeatPath     = "/api/heartbeat"
+	idleTimeout       = 20 * time.Second
+	idleCheckInterval = 5 * time.Second
 )
 
 func main() {
@@ -24,6 +33,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	tracker := newIdleTracker(cfg.ExitOnIdle)
+	handler = withIdleSupport(handler, tracker)
 
 	server := &http.Server{
 		Handler:           handler,
@@ -43,6 +55,10 @@ func main() {
 		serverErrors <- server.Serve(listener)
 	}()
 
+	if cfg.ExitOnIdle {
+		go shutdownOnIdle(server, tracker)
+	}
+
 	if cfg.AutoLoadURL != "" {
 		if err := openBrowser(baseURL); err != nil {
 			log.Printf("Could not open browser automatically: %v", err)
@@ -52,6 +68,74 @@ func main() {
 	err = <-serverErrors
 	if !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
+	}
+}
+
+type idleTracker struct {
+	enabled  bool
+	lastSeen atomic.Int64
+}
+
+func newIdleTracker(enabled bool) *idleTracker {
+	tracker := &idleTracker{enabled: enabled}
+	tracker.Touch()
+	return tracker
+}
+
+func (t *idleTracker) Touch() {
+	if !t.enabled {
+		return
+	}
+	t.lastSeen.Store(time.Now().UnixNano())
+}
+
+func (t *idleTracker) IdleFor(now time.Time) time.Duration {
+	if !t.enabled {
+		return 0
+	}
+
+	lastSeen := t.lastSeen.Load()
+	if lastSeen == 0 {
+		return 0
+	}
+
+	return now.Sub(time.Unix(0, lastSeen))
+}
+
+func withIdleSupport(next http.Handler, tracker *idleTracker) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method == http.MethodPost && request.URL.Path == heartbeatPath {
+			tracker.Touch()
+			writer.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		if request.URL.Path == "/" || strings.HasPrefix(request.URL.Path, "/api/") {
+			tracker.Touch()
+		}
+
+		next.ServeHTTP(writer, request)
+	})
+}
+
+func shutdownOnIdle(server *http.Server, tracker *idleTracker) {
+	ticker := time.NewTicker(idleCheckInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if tracker.IdleFor(time.Now()) < idleTimeout {
+			continue
+		}
+
+		log.Printf("No active page heartbeat for %s, shutting down", idleTimeout)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := server.Shutdown(ctx)
+		cancel()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("Idle shutdown failed: %v", err)
+		}
+		return
 	}
 }
 
