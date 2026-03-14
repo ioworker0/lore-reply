@@ -9,6 +9,7 @@ It uses `b4` to fetch one target message, turns it into an editable plain-text r
 - Single Go binary
 - Local-only web UI by default on `127.0.0.1:9110`
 - `b4` integration with startup validation
+- Optional startup URL with automatic browser open and auto-load
 - Plain-text editor with monospace fonts and a 72-column ruler
 - Full-screen body editor for long replies
 - Editable `From`, `To`, `Cc`, `Subject`, and `Body`
@@ -16,6 +17,9 @@ It uses `b4` to fetch one target message, turns it into an editable plain-text r
 - Draggable recipients between `To` and `Cc`
 - Structured recipient add dialog with optional name and required email
 - Stable draft path generated from `Message-ID` and subject
+- Existing saved drafts are restored when you load the same lore URL again
+- `Reload` discards the current saved draft state and fetches a fresh draft from lore
+- `Load Another` returns to the URL input so you can switch to a different mail
 - Save result dialog with a copy button for the generated `git send-email` command
 - `From Name` and `From Email` are saved in local browser storage after a successful save
 - Optional idle-exit mode driven by page heartbeat
@@ -28,7 +32,6 @@ Current scope is intentionally small:
 - one loaded draft at a time
 - no direct mail sending from the web UI
 - no draft list
-- no refresh recovery for unsaved edits
 - no thread management beyond replying to a single lore message
 
 ## Requirements
@@ -112,11 +115,16 @@ If `--exit-on-idle` is also provided, the page sends a heartbeat every 5 seconds
 2. Click `Load`.
 3. `lore-reply` calls `b4 mbox --single-message` and builds an editable reply draft.
 4. Edit `From`, recipients, subject, and body.
-5. Click `Save`.
-6. The draft is written under `/tmp/lore-reply/drafts/`.
-7. Copy the generated `git send-email` command and run it in your shell.
+5. Dirty drafts are auto-saved every 5 seconds.
+6. Click `Save` at any time for an immediate save and a ready-to-run `git send-email` command.
+7. The draft is written under `/tmp/lore-reply/drafts/`.
+8. Copy the generated `git send-email` command and run it in your shell.
 
 With `--url`, steps `1` and `2` are performed automatically after startup.
+
+If you load the same lore URL again later, `lore-reply` restores the saved draft from `/tmp/lore-reply/drafts/` instead of overwriting it.
+
+Use `Reload` in the top-right corner if you want to discard the current saved draft state and fetch a fresh copy from lore.
 
 ## Draft Output
 
@@ -130,6 +138,8 @@ Saved drafts are plain-text mail files. The generated send command includes:
 
 The same loaded draft overwrites the same file on repeated saves.
 
+Each saved draft also writes a small metadata sidecar so custom `To` and `Cc` changes can be restored together with the saved body.
+
 ## Notes
 
 - The UI is designed for kernel-style plain-text mail replies.
@@ -137,3 +147,4 @@ The same loaded draft overwrites the same file on repeated saves.
 - `b4` errors are shown directly in the page without extra translation.
 - The app binds to localhost by default and is meant to be used as a local tool.
 - When a loaded draft is dirty, the page auto-saves it to disk every 5 seconds.
+- Auto-save reduces accidental loss, but the most recent unsaved keystrokes can still be lost if the browser exits before the next save window.
