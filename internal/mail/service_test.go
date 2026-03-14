@@ -1,6 +1,9 @@
 package mail
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -113,4 +116,155 @@ func TestBuildSendCommand(t *testing.T) {
 			t.Fatalf("command missing %q:\n%s", part, command)
 		}
 	}
+}
+
+func TestLoadDraftRestoresSavedDraft(t *testing.T) {
+	t.Parallel()
+
+	service := Service{
+		B4Path:    writeTestB4(t),
+		DraftsDir: t.TempDir(),
+	}
+
+	draft, err := service.LoadDraft(context.Background(), LoadOptions{
+		URL:       "https://lore.kernel.org/linux-mm/test",
+		FromName:  "Alice Example",
+		FromEmail: "alice@example.com",
+	})
+	if err != nil {
+		t.Fatalf("LoadDraft returned error: %v", err)
+	}
+
+	draft.FromName = "Saved Name"
+	draft.FromEmail = "saved@example.com"
+	draft.To = `"Saved Reviewer" <saved-to@example.com>`
+	draft.Cc = `saved-cc@example.com`
+	draft.Subject = "Re: [PATCH] Saved subject"
+	draft.Body = "saved body"
+
+	result, err := service.SaveDraft(draft)
+	if err != nil {
+		t.Fatalf("SaveDraft returned error: %v", err)
+	}
+
+	restored, err := service.LoadDraft(context.Background(), LoadOptions{
+		URL:       "https://lore.kernel.org/linux-mm/test",
+		FromName:  "Ignored Name",
+		FromEmail: "ignored@example.com",
+	})
+	if err != nil {
+		t.Fatalf("LoadDraft restore returned error: %v", err)
+	}
+
+	if restored.DraftPath != result.DraftPath {
+		t.Fatalf("unexpected restored draft path:\nwant: %s\ngot:  %s", result.DraftPath, restored.DraftPath)
+	}
+	if restored.FromName != "Saved Name" || restored.FromEmail != "saved@example.com" {
+		t.Fatalf("saved identity was not restored: %#v", restored)
+	}
+	if restored.To != `"Saved Reviewer" <saved-to@example.com>` {
+		t.Fatalf("saved To header was not restored: %q", restored.To)
+	}
+	if restored.Cc != "saved-cc@example.com" {
+		t.Fatalf("saved Cc header was not restored: %q", restored.Cc)
+	}
+	if restored.Subject != "Re: [PATCH] Saved subject" {
+		t.Fatalf("saved subject was not restored: %q", restored.Subject)
+	}
+	if restored.Body != "saved body" {
+		t.Fatalf("saved body was not restored: %q", restored.Body)
+	}
+
+	if _, err := os.Stat(result.DraftPath + ".meta.json"); err != nil {
+		t.Fatalf("draft metadata file missing: %v", err)
+	}
+
+	reloaded, err := service.LoadDraft(context.Background(), LoadOptions{
+		URL:         "https://lore.kernel.org/linux-mm/test",
+		FromName:    "Fresh Name",
+		FromEmail:   "fresh@example.com",
+		ForceReload: true,
+	})
+	if err != nil {
+		t.Fatalf("LoadDraft force reload returned error: %v", err)
+	}
+
+	if reloaded.FromName != "Fresh Name" || reloaded.FromEmail != "fresh@example.com" {
+		t.Fatalf("force reload did not use fresh identity: %#v", reloaded)
+	}
+	if reloaded.To != `"Example Author" <author@example.com>` {
+		t.Fatalf("force reload did not restore original To: %q", reloaded.To)
+	}
+	if reloaded.Cc != `linux-mm@kvack.org, "Andrew Morton" <akpm@example.com>, "Jane Doe" <jane@example.com>` {
+		t.Fatalf("force reload did not restore original Cc: %q", reloaded.Cc)
+	}
+	if reloaded.Body == "saved body" {
+		t.Fatalf("force reload unexpectedly restored saved body")
+	}
+	if _, err := os.Stat(result.DraftPath); !os.IsNotExist(err) {
+		t.Fatalf("force reload should remove the old saved draft, got err=%v", err)
+	}
+
+	afterRefresh, err := service.LoadDraft(context.Background(), LoadOptions{
+		URL:       "https://lore.kernel.org/linux-mm/test",
+		FromName:  "Refreshed Name",
+		FromEmail: "refreshed@example.com",
+	})
+	if err != nil {
+		t.Fatalf("LoadDraft after force reload returned error: %v", err)
+	}
+
+	if afterRefresh.Body == "saved body" {
+		t.Fatalf("refresh-style load unexpectedly restored the old saved body")
+	}
+}
+
+func writeTestB4(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "b4")
+	script := `#!/bin/sh
+out_dir=""
+url=""
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+		-o)
+			out_dir="$2"
+			shift 2
+			;;
+		*)
+			url="$1"
+			shift
+			;;
+	esac
+done
+
+if [ "$url" = "fail" ]; then
+	echo "b4 exploded" >&2
+	exit 1
+fi
+
+cat > "$out_dir/test.mbx" <<'EOF'
+From nobody Mon Jan 01 00:00:00 2024
+From: Example Author <author@example.com>
+To: linux-mm@kvack.org, Andrew Morton <akpm@example.com>
+Cc: Jane Doe <jane@example.com>
+Subject: [PATCH] Example patch
+Message-ID: <abc.123@example.com>
+Date: Sun, 01 Feb 2026 09:20:35 -0500
+Content-Transfer-Encoding: quoted-printable
+
+Example=20body
+
+-- 
+Signature
+EOF
+`
+
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write test b4: %v", err)
+	}
+
+	return path
 }

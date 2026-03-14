@@ -3,6 +3,7 @@ package mail
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -40,9 +41,10 @@ type Draft struct {
 
 // LoadOptions controls draft generation.
 type LoadOptions struct {
-	URL       string
-	FromName  string
-	FromEmail string
+	URL         string
+	FromName    string
+	FromEmail   string
+	ForceReload bool
 }
 
 // SaveResult is returned after writing a draft to disk.
@@ -80,6 +82,19 @@ type parsedMessage struct {
 	QuotedBody   string
 }
 
+type savedDraftMetadata struct {
+	MessageID string `json:"message_id"`
+	To        string `json:"to"`
+	Cc        string `json:"cc"`
+}
+
+type savedDraftContent struct {
+	FromName  string
+	FromEmail string
+	Subject   string
+	Body      string
+}
+
 // LoadDraft fetches the lore URL with b4 and returns a browser-editable draft.
 func (s Service) LoadDraft(ctx context.Context, opts LoadOptions) (Draft, error) {
 	if strings.TrimSpace(opts.URL) == "" {
@@ -98,6 +113,18 @@ func (s Service) LoadDraft(ctx context.Context, opts LoadOptions) (Draft, error)
 
 	body := "\n" + buildCitation(msg.CitationDate, msg.AuthorName) + "\n" + msg.QuotedBody
 	draftPath := buildDraftPath(s.DraftsDir, msg.MessageID, msg.Subject)
+
+	if opts.ForceReload {
+		if err := removeSavedDraft(draftPath); err != nil {
+			return Draft{}, err
+		}
+	} else {
+		if draft, restored, err := s.loadSavedDraft(draftPath, opts.URL, msg); err != nil {
+			return Draft{}, err
+		} else if restored {
+			return draft, nil
+		}
+	}
 
 	return Draft{
 		FromName:  opts.FromName,
@@ -136,6 +163,10 @@ func (s Service) SaveDraft(draft Draft) (SaveResult, error) {
 		return SaveResult{}, fmt.Errorf("write draft: %w", err)
 	}
 
+	if err := writeDraftMetadata(draftPath, draft); err != nil {
+		return SaveResult{}, err
+	}
+
 	return SaveResult{
 		DraftPath:   draftPath,
 		SendCommand: buildSendCommand(draft, draftPath),
@@ -171,6 +202,49 @@ func (s Service) fetchMessage(ctx context.Context, url string) ([]byte, string, 
 	}
 
 	return data, string(output), nil
+}
+
+func (s Service) loadSavedDraft(draftPath, sourceURL string, message parsedMessage) (Draft, bool, error) {
+	savedData, err := os.ReadFile(draftPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Draft{}, false, nil
+		}
+		return Draft{}, false, fmt.Errorf("read saved draft: %w", err)
+	}
+
+	saved, err := parseSavedDraftFile(savedData)
+	if err != nil {
+		return Draft{}, false, fmt.Errorf("parse saved draft: %w", err)
+	}
+
+	metadata, err := readDraftMetadata(draftPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return Draft{}, false, err
+	}
+
+	to := message.To
+	cc := message.Cc
+	if metadata.MessageID == message.MessageID || metadata.MessageID == "" {
+		if strings.TrimSpace(metadata.To) != "" {
+			to = metadata.To
+		}
+		if strings.TrimSpace(metadata.Cc) != "" {
+			cc = metadata.Cc
+		}
+	}
+
+	return Draft{
+		FromName:  saved.FromName,
+		FromEmail: saved.FromEmail,
+		To:        to,
+		Cc:        cc,
+		Subject:   saved.Subject,
+		Body:      saved.Body,
+		MessageID: message.MessageID,
+		DraftPath: draftPath,
+		SourceURL: sourceURL,
+	}, true, nil
 }
 
 func parseMessageContent(data []byte) (parsedMessage, error) {
@@ -240,6 +314,30 @@ func cleanBody(message *netmail.Message) string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func parseSavedDraftFile(data []byte) (savedDraftContent, error) {
+	content := strings.ReplaceAll(string(data), "\r\n", "\n")
+	message, err := netmail.ReadMessage(strings.NewReader(content))
+	if err != nil {
+		return savedDraftContent{}, fmt.Errorf("parse saved draft message: %w", err)
+	}
+
+	bodyData, err := io.ReadAll(message.Body)
+	if err != nil {
+		return savedDraftContent{}, fmt.Errorf("read saved draft body: %w", err)
+	}
+
+	fromName, fromEmail := parseFromHeader(message.Header.Get("From"))
+	body := strings.ReplaceAll(string(bodyData), "\r\n", "\n")
+	body = strings.TrimSuffix(body, "\n")
+
+	return savedDraftContent{
+		FromName:  fromName,
+		FromEmail: fromEmail,
+		Subject:   decodeHeaderValue(message.Header.Get("Subject")),
+		Body:      body,
+	}, nil
 }
 
 func quoteBody(body string) string {
@@ -512,6 +610,73 @@ func formatFromHeader(name, email string) string {
 	default:
 		return name
 	}
+}
+
+func parseFromHeader(raw string) (string, string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", ""
+	}
+
+	address, err := netmail.ParseAddress(raw)
+	if err == nil {
+		return address.Name, address.Address
+	}
+
+	if strings.HasPrefix(raw, "<") && strings.HasSuffix(raw, ">") {
+		return "", strings.Trim(raw, "<>")
+	}
+
+	return raw, ""
+}
+
+func draftMetadataPath(draftPath string) string {
+	return draftPath + ".meta.json"
+}
+
+func writeDraftMetadata(draftPath string, draft Draft) error {
+	metadata := savedDraftMetadata{
+		MessageID: draft.MessageID,
+		To:        draft.To,
+		Cc:        draft.Cc,
+	}
+
+	data, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("encode draft metadata: %w", err)
+	}
+
+	if err := os.WriteFile(draftMetadataPath(draftPath), data, 0o644); err != nil {
+		return fmt.Errorf("write draft metadata: %w", err)
+	}
+
+	return nil
+}
+
+func readDraftMetadata(draftPath string) (savedDraftMetadata, error) {
+	data, err := os.ReadFile(draftMetadataPath(draftPath))
+	if err != nil {
+		return savedDraftMetadata{}, err
+	}
+
+	var metadata savedDraftMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return savedDraftMetadata{}, fmt.Errorf("parse draft metadata: %w", err)
+	}
+
+	return metadata, nil
+}
+
+func removeSavedDraft(draftPath string) error {
+	if err := os.Remove(draftPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove saved draft: %w", err)
+	}
+
+	if err := os.Remove(draftMetadataPath(draftPath)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove saved draft metadata: %w", err)
+	}
+
+	return nil
 }
 
 func buildSendCommand(draft Draft, draftPath string) string {

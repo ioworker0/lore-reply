@@ -64,9 +64,9 @@ func TestLoadAndSaveFlow(t *testing.T) {
 		FromEmail: "alice@example.com",
 	})
 
-	loadRequest := httptest.NewRequest(http.MethodPost, "/api/load", bytes.NewReader(loadBody))
+	request := httptest.NewRequest(http.MethodPost, "/api/load", bytes.NewReader(loadBody))
 	loadRecorder := httptest.NewRecorder()
-	handler.ServeHTTP(loadRecorder, loadRequest)
+	handler.ServeHTTP(loadRecorder, request)
 
 	if loadRecorder.Code != http.StatusOK {
 		t.Fatalf("load request failed: %d %s", loadRecorder.Code, loadRecorder.Body.String())
@@ -166,6 +166,88 @@ func TestLoadFailureReturnsRawB4Output(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), "b4 exploded") {
 		t.Fatalf("raw b4 output missing from error response: %s", recorder.Body.String())
+	}
+}
+
+func TestLoadForceReloadIgnoresSavedDraft(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+
+	loadBody := mustJSON(t, loadRequest{
+		URL:       "https://lore.kernel.org/linux-mm/test",
+		FromName:  "Alice Example",
+		FromEmail: "alice@example.com",
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/load", bytes.NewReader(loadBody))
+	loadRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(loadRecorder, request)
+
+	if loadRecorder.Code != http.StatusOK {
+		t.Fatalf("initial load failed: %d %s", loadRecorder.Code, loadRecorder.Body.String())
+	}
+
+	var draft mail.Draft
+	if err := json.Unmarshal(loadRecorder.Body.Bytes(), &draft); err != nil {
+		t.Fatalf("decode initial load response: %v", err)
+	}
+
+	draft.Body = "saved body"
+	saveBody := mustJSON(t, draft)
+	saveRequest := httptest.NewRequest(http.MethodPost, "/api/save", bytes.NewReader(saveBody))
+	saveRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(saveRecorder, saveRequest)
+
+	if saveRecorder.Code != http.StatusOK {
+		t.Fatalf("save request failed: %d %s", saveRecorder.Code, saveRecorder.Body.String())
+	}
+
+	forceBody := mustJSON(t, loadRequest{
+		URL:         "https://lore.kernel.org/linux-mm/test",
+		FromName:    "Fresh Name",
+		FromEmail:   "fresh@example.com",
+		ForceReload: true,
+	})
+	forceRequest := httptest.NewRequest(http.MethodPost, "/api/load", bytes.NewReader(forceBody))
+	forceRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(forceRecorder, forceRequest)
+
+	if forceRecorder.Code != http.StatusOK {
+		t.Fatalf("force reload failed: %d %s", forceRecorder.Code, forceRecorder.Body.String())
+	}
+
+	var reloaded mail.Draft
+	if err := json.Unmarshal(forceRecorder.Body.Bytes(), &reloaded); err != nil {
+		t.Fatalf("decode force reload response: %v", err)
+	}
+
+	if reloaded.Body == "saved body" {
+		t.Fatalf("force reload unexpectedly restored saved body")
+	}
+	if reloaded.FromName != "Fresh Name" || reloaded.FromEmail != "fresh@example.com" {
+		t.Fatalf("force reload did not use fresh sender identity: %#v", reloaded)
+	}
+
+	revisitBody := mustJSON(t, loadRequest{
+		URL:       "https://lore.kernel.org/linux-mm/test",
+		FromName:  "Later Name",
+		FromEmail: "later@example.com",
+	})
+	revisitRequest := httptest.NewRequest(http.MethodPost, "/api/load", bytes.NewReader(revisitBody))
+	revisitRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(revisitRecorder, revisitRequest)
+
+	if revisitRecorder.Code != http.StatusOK {
+		t.Fatalf("revisit load failed: %d %s", revisitRecorder.Code, revisitRecorder.Body.String())
+	}
+
+	var revisited mail.Draft
+	if err := json.Unmarshal(revisitRecorder.Body.Bytes(), &revisited); err != nil {
+		t.Fatalf("decode revisit load response: %v", err)
+	}
+
+	if revisited.Body == "saved body" {
+		t.Fatalf("revisit load unexpectedly restored the old saved body")
 	}
 }
 

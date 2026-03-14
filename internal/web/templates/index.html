@@ -87,6 +87,13 @@
       margin-bottom: 16px;
     }
 
+    .composer-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
     .field {
       display: flex;
       flex-direction: column;
@@ -510,6 +517,10 @@
       </div>
 
       <div id="composer" hidden>
+        <div class="composer-toolbar">
+          <button id="reloadButton" type="button" class="secondary">Reload</button>
+          <button id="loadAnotherButton" type="button" class="secondary">Load Another</button>
+        </div>
         <div class="grid">
           <label class="field">
             <span class="field-head">
@@ -661,6 +672,8 @@
       bodyCloseButton: document.getElementById("bodyCloseButton"),
       messageId: document.getElementById("messageId"),
       loadButton: document.getElementById("loadButton"),
+      reloadButton: document.getElementById("reloadButton"),
+      loadAnotherButton: document.getElementById("loadAnotherButton"),
       saveButton: document.getElementById("saveButton"),
       status: document.getElementById("status"),
       autosaveStatus: document.getElementById("autosaveStatus"),
@@ -751,6 +764,8 @@
 
     function setBusy(busy, action) {
       elements.loadButton.disabled = busy;
+      elements.reloadButton.disabled = busy;
+      elements.loadAnotherButton.disabled = busy;
       elements.saveButton.disabled = busy;
       setStatus(busy ? action : "");
     }
@@ -1146,7 +1161,7 @@
       navigator.sendBeacon("/api/save", body);
     }
 
-    async function loadDraft() {
+    async function loadDraft(forceReload) {
       if (state.loading || state.saving) {
         return;
       }
@@ -1158,11 +1173,12 @@
         const draft = await postJSON("/api/load", {
           url: elements.url.value,
           from_name: elements.fromName.value,
-          from_email: elements.fromEmail.value
+          from_email: elements.fromEmail.value,
+          force_reload: Boolean(forceReload)
         });
         hydrateDraft(draft);
         setLoadedState(true);
-        setStatus("Draft loaded.");
+        setStatus(forceReload ? "Draft reloaded." : "Draft loaded.");
       } catch (error) {
         showError(String(error.message || error));
         setStatus("");
@@ -1172,7 +1188,51 @@
       }
     }
 
-    elements.loadButton.addEventListener("click", loadDraft);
+    elements.loadButton.addEventListener("click", () => {
+      void loadDraft(false);
+    });
+
+    async function reloadDraft() {
+      if (!elements.url.value.trim()) {
+        return;
+      }
+
+      closeBodyDialog();
+      await loadDraft(true);
+    }
+
+    elements.reloadButton.addEventListener("click", () => {
+      void reloadDraft();
+    });
+
+    async function loadAnotherDraft() {
+      if (state.loading || state.saving) {
+        return;
+      }
+
+      clearError();
+
+      if (state.dirty && elements.messageId.value) {
+        setBusy(true, "Saving current draft...");
+        const result = await saveDraft({ interactive: false, showDialog: false });
+        setBusy(false, "");
+        if (!result) {
+          return;
+        }
+      }
+
+      closeBodyDialog();
+      setLoadedState(false);
+      setStatus("");
+      window.setTimeout(() => {
+        elements.url.focus();
+        elements.url.select();
+      }, 0);
+    }
+
+    elements.loadAnotherButton.addEventListener("click", () => {
+      void loadAnotherDraft();
+    });
 
     async function saveDraft(options) {
       const interactive = Boolean(options && options.interactive);
@@ -1334,7 +1394,7 @@
 
     if (elements.url.value.trim()) {
       window.setTimeout(() => {
-        void loadDraft();
+        void loadDraft(false);
       }, 0);
     }
 

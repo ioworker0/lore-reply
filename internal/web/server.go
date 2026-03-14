@@ -22,9 +22,10 @@ type pageData struct {
 }
 
 type loadRequest struct {
-	URL       string `json:"url"`
-	FromName  string `json:"from_name"`
-	FromEmail string `json:"from_email"`
+	URL         string `json:"url"`
+	FromName    string `json:"from_name"`
+	FromEmail   string `json:"from_email"`
+	ForceReload bool   `json:"force_reload"`
 }
 
 type errorResponse struct {
@@ -76,9 +77,10 @@ func (s *server) handleLoad(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	draft, err := s.mail.LoadDraft(request.Context(), mail.LoadOptions{
-		URL:       payload.URL,
-		FromName:  fallback(payload.FromName, s.cfg.FromName),
-		FromEmail: fallback(payload.FromEmail, s.cfg.FromEmail),
+		URL:         payload.URL,
+		FromName:    fallback(payload.FromName, s.cfg.FromName),
+		FromEmail:   fallback(payload.FromEmail, s.cfg.FromEmail),
+		ForceReload: payload.ForceReload,
 	})
 	if err != nil {
 		var b4Err *mail.B4Error
