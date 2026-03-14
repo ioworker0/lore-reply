@@ -170,6 +170,7 @@
 
     input,
     textarea,
+    select,
     button,
     pre,
     code {
@@ -418,12 +419,18 @@
     }
 
     .fullscreen-dialog {
+      --fs-bg: var(--panel);
+      --fs-editor-bg: #fff;
+      --fs-border: var(--line);
+      --fs-text: var(--text);
+      --fs-muted: var(--muted);
+      --fs-ruler: var(--accent);
       width: calc(100vw - 24px);
       max-width: none;
       height: calc(100vh - 24px);
       max-height: none;
-      background: #ebe7df;
-      border-color: rgba(86, 72, 57, 0.2);
+      background: var(--fs-bg);
+      border-color: var(--fs-border);
     }
 
     .fullscreen-dialog .dialog-body {
@@ -431,7 +438,8 @@
       flex-direction: column;
       height: 100%;
       padding: 18px;
-      background: #ebe7df;
+      background: var(--fs-bg);
+      color: var(--fs-text);
     }
 
     .fullscreen-note {
@@ -446,8 +454,10 @@
       min-height: 0;
       height: 100%;
       resize: none;
-      background: #f4f0e8;
-      border-color: rgba(86, 72, 57, 0.24);
+      background: var(--fs-editor-bg);
+      border-color: var(--fs-border);
+      color: var(--fs-text);
+      caret-color: var(--fs-text);
     }
 
     .body-preview {
@@ -458,6 +468,124 @@
     .fullscreen-editor-shell {
       flex: 1 1 auto;
       min-height: 0;
+    }
+
+    .fullscreen-dialog .fullscreen-note,
+    .fullscreen-dialog .autosave-status.fullscreen {
+      color: var(--fs-muted);
+    }
+
+    .fullscreen-dialog .ruler {
+      background: var(--fs-ruler);
+      opacity: 0.42;
+    }
+
+    .fullscreen-dialog button.secondary {
+      background: var(--fs-editor-bg);
+      color: var(--fs-text);
+      border-color: var(--fs-border);
+    }
+
+    .theme-picker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+
+    .theme-picker select {
+      min-width: 9rem;
+      border: 1px solid #c7beb1;
+      border-radius: 10px;
+      padding: 8px 12px;
+      background: #fff;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .fullscreen-dialog .theme-picker {
+      color: var(--fs-muted);
+    }
+
+    .fullscreen-dialog .theme-picker select {
+      border-color: var(--fs-border);
+      background: var(--fs-editor-bg);
+      color: var(--fs-text);
+    }
+
+    .fullscreen-dialog[data-theme="paper"] {
+      --fs-bg: #ebe7df;
+      --fs-editor-bg: #f4f0e8;
+      --fs-border: rgba(86, 72, 57, 0.24);
+      --fs-text: #1f1a17;
+      --fs-muted: #75685d;
+      --fs-ruler: var(--accent);
+    }
+
+    .fullscreen-dialog[data-theme="slate"] {
+      --fs-bg: #21262d;
+      --fs-editor-bg: #161b22;
+      --fs-border: rgba(110, 118, 129, 0.36);
+      --fs-text: #e6edf3;
+      --fs-muted: #9aa4af;
+      --fs-ruler: #58a6ff;
+    }
+
+    .fullscreen-dialog[data-theme="amber"] {
+      --fs-bg: #2b2117;
+      --fs-editor-bg: #1d150e;
+      --fs-border: rgba(193, 154, 107, 0.34);
+      --fs-text: #f3eadf;
+      --fs-muted: #cdb498;
+      --fs-ruler: #e0a458;
+    }
+
+    .fullscreen-dialog[data-theme="forest"] {
+      --fs-bg: #1d2a24;
+      --fs-editor-bg: #141d19;
+      --fs-border: rgba(108, 145, 124, 0.34);
+      --fs-text: #e4efe8;
+      --fs-muted: #a3baaf;
+      --fs-ruler: #67b48d;
+    }
+
+    .fullscreen-dialog[data-theme="midnight"] {
+      --fs-bg: #151821;
+      --fs-editor-bg: #0f1218;
+      --fs-border: rgba(123, 140, 174, 0.34);
+      --fs-text: #e7edf8;
+      --fs-muted: #9ca8bf;
+      --fs-ruler: #7aa2f7;
+    }
+
+    .fullscreen-dialog[data-theme="rose"] {
+      --fs-bg: #2b1d22;
+      --fs-editor-bg: #1c1115;
+      --fs-border: rgba(181, 118, 136, 0.34);
+      --fs-text: #f4e8eb;
+      --fs-muted: #cfacb7;
+      --fs-ruler: #d7829b;
+    }
+
+    .fullscreen-dialog[data-theme="ocean"] {
+      --fs-bg: #16242b;
+      --fs-editor-bg: #0f191e;
+      --fs-border: rgba(103, 154, 173, 0.34);
+      --fs-text: #e3f0f4;
+      --fs-muted: #a7c1c9;
+      --fs-ruler: #5fb3c6;
+    }
+
+    .fullscreen-dialog[data-theme="terminal"] {
+      --fs-bg: #111611;
+      --fs-editor-bg: #0a0f0a;
+      --fs-border: rgba(92, 170, 114, 0.34);
+      --fs-text: #d8f7d8;
+      --fs-muted: #95c79c;
+      --fs-ruler: #4fd16a;
     }
 
     .dialog-head {
@@ -634,6 +762,20 @@
       <div class="dialog-head">
         <h2>Body Editor</h2>
         <div class="dialog-actions">
+          <label class="theme-picker">
+            <span>Theme</span>
+            <select id="bodyTheme">
+              <option value="default">Default</option>
+              <option value="paper">Paper</option>
+              <option value="slate">Slate</option>
+              <option value="amber">Amber</option>
+              <option value="forest">Forest</option>
+              <option value="midnight">Midnight</option>
+              <option value="rose">Rose</option>
+              <option value="ocean">Ocean</option>
+              <option value="terminal">Terminal</option>
+            </select>
+          </label>
           <button id="bodyCloseButton" type="button" class="secondary">Close</button>
         </div>
       </div>
@@ -669,6 +811,7 @@
       body: document.getElementById("body"),
       bodyDialog: document.getElementById("bodyDialog"),
       fullscreenBody: document.getElementById("fullscreenBody"),
+      bodyTheme: document.getElementById("bodyTheme"),
       bodyCloseButton: document.getElementById("bodyCloseButton"),
       messageId: document.getElementById("messageId"),
       loadButton: document.getElementById("loadButton"),
@@ -713,7 +856,8 @@
 
     const storageKeys = {
       fromName: "lore-reply.from-name",
-      fromEmail: "lore-reply.from-email"
+      fromEmail: "lore-reply.from-email",
+      bodyTheme: "lore-reply.body-theme"
     };
 
     function setStatus(message) {
@@ -852,6 +996,36 @@
         if (storedEmail) {
           elements.fromEmail.value = storedEmail;
         }
+      } catch (_error) {
+      }
+    }
+
+    function applyBodyTheme(theme) {
+      const allowedThemes = new Set(["default", "paper", "slate", "amber", "forest", "midnight", "rose", "ocean", "terminal"]);
+      const resolvedTheme = allowedThemes.has(theme) ? theme : "default";
+      if (resolvedTheme === "default") {
+        delete elements.bodyDialog.dataset.theme;
+      } else {
+        elements.bodyDialog.dataset.theme = resolvedTheme;
+      }
+      elements.bodyTheme.value = resolvedTheme;
+    }
+
+    function loadStoredBodyTheme() {
+      try {
+        applyBodyTheme(window.localStorage.getItem(storageKeys.bodyTheme) || "default");
+      } catch (_error) {
+        applyBodyTheme("default");
+      }
+    }
+
+    function storeBodyTheme(theme) {
+      try {
+        if (theme === "default") {
+          window.localStorage.removeItem(storageKeys.bodyTheme);
+          return;
+        }
+        window.localStorage.setItem(storageKeys.bodyTheme, theme);
       } catch (_error) {
       }
     }
@@ -1344,6 +1518,10 @@
       markDirty();
     });
     elements.bodyCloseButton.addEventListener("click", closeBodyDialog);
+    elements.bodyTheme.addEventListener("change", () => {
+      applyBodyTheme(elements.bodyTheme.value);
+      storeBodyTheme(elements.bodyTheme.value);
+    });
 
     bindRecipientBoard(elements.toBoard, "to");
     bindRecipientBoard(elements.ccBoard, "cc");
@@ -1382,6 +1560,7 @@
     });
 
     loadStoredIdentity();
+    loadStoredBodyTheme();
     setLoadedState(false);
     updateAutosaveStatus();
 
