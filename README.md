@@ -78,6 +78,7 @@ Available flags:
 --from-name
 --from-email
 --listen
+--url
 ```
 
 Example:
@@ -87,7 +88,8 @@ Example:
   --b4 /path/to/b4 \
   --from-name "Your Name" \
   --from-email "you@example.com" \
-  --listen 127.0.0.1:9110
+  --listen 127.0.0.1:9110 \
+  --url "https://lore.kernel.org/linux-mm/..."
 ```
 
 Then open:
@@ -95,6 +97,8 @@ Then open:
 ```text
 http://127.0.0.1:9110
 ```
+
+If `--url` is provided, `lore-reply` opens the browser on startup and automatically runs the page `Load` step for that URL.
 
 ## Workflow
 
@@ -105,6 +109,8 @@ http://127.0.0.1:9110
 5. Click `Save`.
 6. The draft is written under `/tmp/lore-reply/drafts/`.
 7. Copy the generated `git send-email` command and run it in your shell.
+
+With `--url`, steps `1` and `2` are performed automatically after startup.
 
 ## Draft Output
 

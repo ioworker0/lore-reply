@@ -18,20 +18,22 @@ const (
 
 // Config holds the resolved runtime settings.
 type Config struct {
-	B4Path    string
-	FromName  string
-	FromEmail string
-	Listen    string
-	DraftsDir string
+	B4Path      string
+	FromName    string
+	FromEmail   string
+	Listen      string
+	DraftsDir   string
+	AutoLoadURL string
 }
 
 // Load parses flags, validates dependencies, and returns the runtime config.
 func Load() (Config, error) {
 	var (
-		b4Path    = flag.String("b4", "", "path to the b4 executable")
-		fromName  = flag.String("from-name", defaultFromName, "default sender name")
-		fromEmail = flag.String("from-email", defaultFromEmail, "default sender email")
-		listen    = flag.String("listen", defaultListen, "listen address")
+		b4Path      = flag.String("b4", "", "path to the b4 executable")
+		fromName    = flag.String("from-name", defaultFromName, "default sender name")
+		fromEmail   = flag.String("from-email", defaultFromEmail, "default sender email")
+		listen      = flag.String("listen", defaultListen, "listen address")
+		autoLoadURL = flag.String("url", "", "lore URL to open and load automatically on startup")
 	)
 
 	flag.Parse()
@@ -51,11 +53,12 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		B4Path:    resolvedB4,
-		FromName:  *fromName,
-		FromEmail: *fromEmail,
-		Listen:    *listen,
-		DraftsDir: draftsDir,
+		B4Path:      resolvedB4,
+		FromName:    *fromName,
+		FromEmail:   *fromEmail,
+		Listen:      *listen,
+		DraftsDir:   draftsDir,
+		AutoLoadURL: *autoLoadURL,
 	}, nil
 }
 

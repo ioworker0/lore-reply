@@ -31,6 +31,28 @@ func TestIndexRendersDefaults(t *testing.T) {
 	}
 }
 
+func TestIndexRendersAutoLoadURL(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandlerWithConfig(t, config.Config{
+		FromName:    "nobody",
+		FromEmail:   "nobody@kernel.org",
+		Listen:      "127.0.0.1:9110",
+		AutoLoadURL: "https://lore.kernel.org/linux-mm/test",
+	})
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), `value="https://lore.kernel.org/linux-mm/test"`) {
+		t.Fatalf("response does not include auto-load URL:\n%s", recorder.Body.String())
+	}
+}
+
 func TestLoadAndSaveFlow(t *testing.T) {
 	t.Parallel()
 
@@ -150,16 +172,24 @@ func TestLoadFailureReturnsRawB4Output(t *testing.T) {
 func newTestHandler(t *testing.T) http.Handler {
 	t.Helper()
 
-	draftsDir := t.TempDir()
-	b4Path := writeTestB4(t)
-
-	handler, err := New(config.Config{
-		B4Path:    b4Path,
+	handler := newTestHandlerWithConfig(t, config.Config{
 		FromName:  "nobody",
 		FromEmail: "nobody@kernel.org",
 		Listen:    "127.0.0.1:9110",
-		DraftsDir: draftsDir,
 	})
+	return handler
+}
+
+func newTestHandlerWithConfig(t *testing.T, cfg config.Config) http.Handler {
+	t.Helper()
+
+	draftsDir := t.TempDir()
+	b4Path := writeTestB4(t)
+
+	cfg.B4Path = b4Path
+	cfg.DraftsDir = draftsDir
+
+	handler, err := New(cfg)
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}

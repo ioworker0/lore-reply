@@ -491,7 +491,7 @@
       <div id="loadStage" class="toolbar">
         <label class="field field-wide">
           <span>Lore URL</span>
-          <input id="url" type="text" placeholder="https://lore.kernel.org/linux-mm/..." autocomplete="off" spellcheck="false">
+          <input id="url" type="text" value="{{ .AutoLoadURL }}" placeholder="https://lore.kernel.org/linux-mm/..." autocomplete="off" spellcheck="false">
         </label>
         <button id="loadButton" type="button">Load</button>
       </div>
@@ -1030,7 +1030,7 @@
       return data;
     }
 
-    elements.loadButton.addEventListener("click", async () => {
+    async function loadDraft() {
       clearError();
       setBusy(true, "Loading draft...");
       try {
@@ -1048,7 +1048,9 @@
       } finally {
         setBusy(false, "");
       }
-    });
+    }
+
+    elements.loadButton.addEventListener("click", loadDraft);
 
     elements.saveButton.addEventListener("click", async () => {
       clearError();
@@ -1146,6 +1148,12 @@
 
     loadStoredIdentity();
     setLoadedState(false);
+
+    if (elements.url.value.trim()) {
+      window.setTimeout(() => {
+        void loadDraft();
+      }, 0);
+    }
 
     window.addEventListener("beforeunload", (event) => {
       if (!state.dirty) {

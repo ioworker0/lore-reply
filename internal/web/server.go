@@ -18,6 +18,7 @@ var templateFS embed.FS
 type pageData struct {
 	DefaultFromName  string
 	DefaultFromEmail string
+	AutoLoadURL      string
 }
 
 type loadRequest struct {
@@ -63,6 +64,7 @@ func (s *server) handleIndex(writer http.ResponseWriter, request *http.Request) 
 	_ = s.template.Execute(writer, pageData{
 		DefaultFromName:  s.cfg.FromName,
 		DefaultFromEmail: s.cfg.FromEmail,
+		AutoLoadURL:      s.cfg.AutoLoadURL,
 	})
 }
 
