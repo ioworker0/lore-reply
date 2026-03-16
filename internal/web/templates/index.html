@@ -389,6 +389,96 @@
       padding: 0 2px;
     }
 
+    .send-queue {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding: 14px 16px;
+      border: 1px solid rgba(155, 44, 44, 0.2);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(155, 44, 44, 0.06), rgba(155, 44, 44, 0.02));
+    }
+
+    .send-queue[data-state="success"] {
+      border-color: rgba(44, 122, 86, 0.24);
+      background: linear-gradient(180deg, rgba(44, 122, 86, 0.08), rgba(44, 122, 86, 0.03));
+    }
+
+    .send-queue[data-state="error"] {
+      border-color: rgba(155, 44, 44, 0.28);
+      background: linear-gradient(180deg, rgba(155, 44, 44, 0.12), rgba(155, 44, 44, 0.04));
+    }
+
+    .send-queue.fullscreen {
+      margin: 14px 0 0;
+      border-color: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .send-queue-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .send-queue-copy {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .send-queue-title {
+      margin: 0;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .send-queue-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .send-queue.fullscreen .send-queue-meta,
+    .send-queue.fullscreen .send-queue-title {
+      color: var(--fs-text);
+    }
+
+    .send-progress {
+      overflow: hidden;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(31, 26, 23, 0.1);
+    }
+
+    .send-queue.fullscreen .send-progress {
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    .send-progress-bar {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #9b2c2c, #d97757);
+      transition: width 180ms linear;
+    }
+
+    .send-queue[data-state="success"] .send-progress-bar {
+      background: linear-gradient(90deg, #2f855a, #48bb78);
+    }
+
+    .send-queue[data-state="error"] .send-progress-bar {
+      background: linear-gradient(90deg, #9b2c2c, #c05656);
+    }
+
+    .send-queue-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
     .error {
       display: none;
       margin-top: 16px;
@@ -620,10 +710,27 @@
       line-height: 1.5;
     }
 
+    .dialog-copy {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .dialog-copy p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
     @media (max-width: 860px) {
       .toolbar,
       .grid {
         grid-template-columns: 1fr;
+      }
+
+      .send-queue-head {
+        flex-direction: column;
       }
     }
   </style>
@@ -633,7 +740,7 @@
     <section class="panel">
       <div class="header">
         <h1>lore-reply</h1>
-        <p>Load one lore patch mail, edit the reply inline, save it into <code>/tmp/lore-reply/drafts/</code>, and run the generated <code>git send-email</code> command yourself.</p>
+        <p>Load one lore patch mail, edit the reply inline, save it into <code>/tmp/lore-reply/drafts/</code>, and either copy the generated <code>git send-email</code> command or send it directly from the page.</p>
       </div>
 
       <div id="loadStage" class="toolbar">
@@ -705,11 +812,29 @@
               <div class="ruler" aria-hidden="true"></div>
               <textarea id="body" class="body-preview" wrap="off" spellcheck="false" readonly></textarea>
               <div class="editor-actions">
-                <button id="saveButton" type="button">Save</button>
+                <button id="saveButton" type="button">Send Mail</button>
               </div>
             </div>
           </label>
           <div id="autosaveStatus" class="autosave-status" aria-live="polite"></div>
+          <div id="sendQueue" class="send-queue" hidden>
+            <div class="send-queue-head">
+              <div class="send-queue-copy">
+                <strong id="sendQueueTitle" class="send-queue-title">Scheduled Send</strong>
+                <div id="sendQueueMessage" class="send-queue-meta"></div>
+              </div>
+              <div class="send-queue-actions">
+                <button id="sendQueueNowButton" type="button">Send Now</button>
+                <button id="sendQueueCopyButton" type="button" class="secondary">Copy Command</button>
+                <button id="sendQueueCancelButton" type="button" class="secondary">Cancel</button>
+                <button id="sendQueueDetailsButton" type="button" class="secondary" hidden>View Output</button>
+                <button id="sendQueueDismissButton" type="button" class="secondary" hidden>Dismiss</button>
+              </div>
+            </div>
+            <div class="send-progress" aria-hidden="true">
+              <div id="sendQueueProgressBar" class="send-progress-bar"></div>
+            </div>
+          </div>
         </div>
 
         <input id="messageId" type="hidden">
@@ -722,14 +847,22 @@
   <dialog id="resultDialog">
     <div class="dialog-body">
       <div class="dialog-head">
-        <h2>Draft Saved</h2>
+        <h2 id="resultDialogTitle">Send Mail</h2>
         <div class="dialog-actions">
-          <button id="copyCommandButton" type="button">Copy Command</button>
+          <button id="scheduleSendButton" type="button">Send in 30s</button>
+          <button id="sendNowButton" type="button" class="secondary">Send Now</button>
+          <button id="copyCommandButton" type="button" class="secondary">Copy Command</button>
           <button id="closeDialogButton" type="button" class="secondary">Close</button>
         </div>
       </div>
-      <p>The draft was saved successfully. Run this command from your shell:</p>
-      <pre id="sendCommand" class="command"></pre>
+      <div class="dialog-copy">
+        <p id="resultDialogMessage">The current draft is saved. Choose delayed send, direct send, or copy the command.</p>
+        <pre id="sendCommand" class="command"></pre>
+      </div>
+      <div id="sendOutputSection" class="dialog-copy" hidden>
+        <p id="sendOutputMessage">git send-email output:</p>
+        <pre id="sendOutput" class="command"></pre>
+      </div>
     </div>
   </dialog>
 
@@ -785,16 +918,44 @@
         <textarea id="fullscreenBody" class="fullscreen-editor" wrap="off" spellcheck="false"></textarea>
       </div>
       <div id="fullscreenAutosaveStatus" class="autosave-status fullscreen" aria-live="polite"></div>
+      <div id="fullscreenSendQueue" class="send-queue fullscreen" hidden>
+        <div class="send-queue-head">
+          <div class="send-queue-copy">
+            <strong id="fullscreenSendQueueTitle" class="send-queue-title">Scheduled Send</strong>
+            <div id="fullscreenSendQueueMessage" class="send-queue-meta"></div>
+          </div>
+          <div class="send-queue-actions">
+            <button id="fullscreenSendQueueNowButton" type="button">Send Now</button>
+            <button id="fullscreenSendQueueCopyButton" type="button" class="secondary">Copy Command</button>
+            <button id="fullscreenSendQueueCancelButton" type="button" class="secondary">Cancel</button>
+            <button id="fullscreenSendQueueDetailsButton" type="button" class="secondary" hidden>View Output</button>
+            <button id="fullscreenSendQueueDismissButton" type="button" class="secondary" hidden>Dismiss</button>
+          </div>
+        </div>
+        <div class="send-progress" aria-hidden="true">
+          <div id="fullscreenSendQueueProgressBar" class="send-progress-bar"></div>
+        </div>
+      </div>
     </div>
   </dialog>
 
   <script>
     const autoSaveDelayMs = 5000;
+    const delayedSendWindowMs = 30000;
     const heartbeatIntervalMs = 5000;
 
     const elements = {
       loadStage: document.getElementById("loadStage"),
       composer: document.getElementById("composer"),
+      sendQueue: document.getElementById("sendQueue"),
+      sendQueueTitle: document.getElementById("sendQueueTitle"),
+      sendQueueMessage: document.getElementById("sendQueueMessage"),
+      sendQueueProgressBar: document.getElementById("sendQueueProgressBar"),
+      sendQueueNowButton: document.getElementById("sendQueueNowButton"),
+      sendQueueCopyButton: document.getElementById("sendQueueCopyButton"),
+      sendQueueCancelButton: document.getElementById("sendQueueCancelButton"),
+      sendQueueDetailsButton: document.getElementById("sendQueueDetailsButton"),
+      sendQueueDismissButton: document.getElementById("sendQueueDismissButton"),
       url: document.getElementById("url"),
       fromName: document.getElementById("fromName"),
       fromEmail: document.getElementById("fromEmail"),
@@ -823,8 +984,15 @@
       fullscreenAutosaveStatus: document.getElementById("fullscreenAutosaveStatus"),
       errorOutput: document.getElementById("errorOutput"),
       resultDialog: document.getElementById("resultDialog"),
+      resultDialogTitle: document.getElementById("resultDialogTitle"),
+      resultDialogMessage: document.getElementById("resultDialogMessage"),
+      scheduleSendButton: document.getElementById("scheduleSendButton"),
+      sendNowButton: document.getElementById("sendNowButton"),
       sendCommand: document.getElementById("sendCommand"),
       copyCommandButton: document.getElementById("copyCommandButton"),
+      sendOutputSection: document.getElementById("sendOutputSection"),
+      sendOutputMessage: document.getElementById("sendOutputMessage"),
+      sendOutput: document.getElementById("sendOutput"),
       closeDialogButton: document.getElementById("closeDialogButton"),
       recipientDialog: document.getElementById("recipientDialog"),
       recipientDialogTitle: document.getElementById("recipientDialogTitle"),
@@ -832,7 +1000,16 @@
       recipientEmail: document.getElementById("recipientEmail"),
       recipientError: document.getElementById("recipientError"),
       recipientConfirmButton: document.getElementById("recipientConfirmButton"),
-      recipientCancelButton: document.getElementById("recipientCancelButton")
+      recipientCancelButton: document.getElementById("recipientCancelButton"),
+      fullscreenSendQueue: document.getElementById("fullscreenSendQueue"),
+      fullscreenSendQueueTitle: document.getElementById("fullscreenSendQueueTitle"),
+      fullscreenSendQueueMessage: document.getElementById("fullscreenSendQueueMessage"),
+      fullscreenSendQueueProgressBar: document.getElementById("fullscreenSendQueueProgressBar"),
+      fullscreenSendQueueNowButton: document.getElementById("fullscreenSendQueueNowButton"),
+      fullscreenSendQueueCopyButton: document.getElementById("fullscreenSendQueueCopyButton"),
+      fullscreenSendQueueCancelButton: document.getElementById("fullscreenSendQueueCancelButton"),
+      fullscreenSendQueueDetailsButton: document.getElementById("fullscreenSendQueueDetailsButton"),
+      fullscreenSendQueueDismissButton: document.getElementById("fullscreenSendQueueDismissButton")
     };
 
     const state = {
@@ -846,6 +1023,12 @@
       lastAutoSaveAt: 0,
       lastAutoSaveError: "",
       lastHeartbeatAt: 0,
+      sendQueuedAt: 0,
+      sendExecuteAt: 0,
+      sendExecuting: false,
+      sendResultState: "",
+      sendResultSummary: "",
+      sendOutput: "",
       dragging: null,
       recipientTargetGroup: "to",
       recipients: {
@@ -853,6 +1036,31 @@
         cc: []
       }
     };
+
+    const sendQueueViews = [
+      {
+        root: elements.sendQueue,
+        title: elements.sendQueueTitle,
+        message: elements.sendQueueMessage,
+        progressBar: elements.sendQueueProgressBar,
+        sendNowButton: elements.sendQueueNowButton,
+        copyButton: elements.sendQueueCopyButton,
+        cancelButton: elements.sendQueueCancelButton,
+        detailsButton: elements.sendQueueDetailsButton,
+        dismissButton: elements.sendQueueDismissButton
+      },
+      {
+        root: elements.fullscreenSendQueue,
+        title: elements.fullscreenSendQueueTitle,
+        message: elements.fullscreenSendQueueMessage,
+        progressBar: elements.fullscreenSendQueueProgressBar,
+        sendNowButton: elements.fullscreenSendQueueNowButton,
+        copyButton: elements.fullscreenSendQueueCopyButton,
+        cancelButton: elements.fullscreenSendQueueCancelButton,
+        detailsButton: elements.fullscreenSendQueueDetailsButton,
+        dismissButton: elements.fullscreenSendQueueDismissButton
+      }
+    ];
 
     const storageKeys = {
       fromName: "lore-reply.from-name",
@@ -882,6 +1090,22 @@
     function showError(message) {
       elements.errorOutput.textContent = message;
       elements.errorOutput.style.display = "block";
+    }
+
+    function openResultDialog() {
+      if (typeof elements.resultDialog.showModal === "function") {
+        elements.resultDialog.showModal();
+      } else {
+        elements.resultDialog.setAttribute("open", "open");
+      }
+    }
+
+    function closeResultDialog() {
+      if (typeof elements.resultDialog.close === "function") {
+        elements.resultDialog.close();
+      } else {
+        elements.resultDialog.removeAttribute("open");
+      }
     }
 
     function openBodyDialog() {
@@ -916,6 +1140,122 @@
 
     function setCopyButtonLabel(label) {
       elements.copyCommandButton.textContent = label;
+      elements.sendQueueCopyButton.textContent = label;
+      elements.fullscreenSendQueueCopyButton.textContent = label;
+    }
+
+    function resetSendState() {
+      state.sendQueuedAt = 0;
+      state.sendExecuteAt = 0;
+      state.sendExecuting = false;
+      state.sendResultState = "";
+      state.sendResultSummary = "";
+      state.sendOutput = "";
+      elements.sendOutput.textContent = "";
+      elements.sendOutputSection.hidden = true;
+      setCopyButtonLabel("Copy Command");
+      updateSendQueue();
+    }
+
+    function sendSecondsRemaining(now) {
+      if (!state.sendExecuteAt) {
+        return 0;
+      }
+      return Math.max(0, Math.ceil((state.sendExecuteAt - now) / 1000));
+    }
+
+    function sendProgressPercent(now) {
+      if (!state.sendQueuedAt || !state.sendExecuteAt) {
+        return state.sendResultState || state.sendExecuting ? 100 : 0;
+      }
+
+      const elapsed = Math.min(delayedSendWindowMs, Math.max(0, now - state.sendQueuedAt));
+      return (elapsed / delayedSendWindowMs) * 100;
+    }
+
+    function updateSendQueue() {
+      const hasPendingSend = Boolean(state.sendExecuteAt);
+      const hasSendResult = Boolean(state.sendResultState);
+      const shouldShow = hasPendingSend || state.sendExecuting || hasSendResult;
+
+      let title = "";
+      let message = "";
+      let progress = 0;
+      let queueState = "";
+
+      if (hasPendingSend) {
+        const seconds = sendSecondsRemaining(Date.now());
+        title = "Delayed Send";
+        message = `Sending in ${seconds}s. You can keep reading or editing detail before it fires.`;
+        progress = sendProgressPercent(Date.now());
+        queueState = "";
+      } else if (state.sendExecuting) {
+        title = "Sending Mail";
+        message = "Saving the latest draft and running git send-email...";
+        progress = 100;
+        queueState = "";
+      } else if (state.sendResultState === "success") {
+        title = "Mail Sent";
+        message = state.sendResultSummary || "git send-email completed successfully.";
+        progress = 100;
+        queueState = "success";
+      } else if (state.sendResultState === "error") {
+        title = "Send Failed";
+        message = state.sendResultSummary || "git send-email failed.";
+        progress = 100;
+        queueState = "error";
+      }
+
+      sendQueueViews.forEach((view) => {
+        view.root.hidden = !shouldShow;
+        if (!shouldShow) {
+          view.root.removeAttribute("data-state");
+          view.progressBar.style.width = "0%";
+          return;
+        }
+
+        if (queueState) {
+          view.root.dataset.state = queueState;
+        } else {
+          view.root.removeAttribute("data-state");
+        }
+
+        view.title.textContent = title;
+        view.message.textContent = message;
+        view.progressBar.style.width = `${progress}%`;
+        view.sendNowButton.hidden = state.sendExecuting || state.sendResultState === "success";
+        view.copyButton.hidden = false;
+        view.cancelButton.hidden = !hasPendingSend;
+        view.detailsButton.hidden = !hasSendResult;
+        view.dismissButton.hidden = !hasSendResult;
+      });
+    }
+
+    function showReadyToSendDialog() {
+      elements.resultDialogTitle.textContent = "Send Mail";
+      elements.resultDialogMessage.textContent = "The current draft is saved. Send it now, queue it for 30 seconds, or copy the command.";
+      elements.sendOutputSection.hidden = true;
+      elements.scheduleSendButton.hidden = false;
+      elements.sendNowButton.hidden = false;
+      elements.sendNowButton.classList.add("secondary");
+      elements.sendNowButton.textContent = "Send Now";
+      openResultDialog();
+    }
+
+    function showSendResultDialog() {
+      const success = state.sendResultState === "success";
+      elements.resultDialogTitle.textContent = success ? "Send Result" : "Send Failed";
+      elements.resultDialogMessage.textContent = success
+        ? (state.sendResultSummary || "git send-email completed successfully.")
+        : (state.sendResultSummary || "git send-email failed.");
+      elements.sendOutputMessage.textContent = "git send-email output:";
+      elements.sendOutput.textContent = state.sendOutput || "(no output)";
+      elements.sendOutputSection.hidden = false;
+      elements.scheduleSendButton.hidden = true;
+      elements.sendNowButton.hidden = success;
+      elements.sendNowButton.classList.add("secondary");
+      elements.sendNowButton.textContent = "Retry Send";
+      openResultDialog();
     }
 
     function markDirty() {
@@ -1238,6 +1578,7 @@
 
     function hydrateDraft(draft) {
       state.hydrating = true;
+      closeResultDialog();
       elements.fromName.value = draft.from_name || elements.fromName.value;
       elements.fromEmail.value = draft.from_email || elements.fromEmail.value;
       state.recipients.to = splitRecipientText(draft.to || "");
@@ -1254,6 +1595,8 @@
       state.lastAutoSaveAt = 0;
       state.lastAutoSaveError = "";
       state.saveMode = "";
+      setCopyButtonLabel("Copy Command");
+      resetSendState();
       setDirty(false);
     }
 
@@ -1305,7 +1648,9 @@
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || "Request failed");
+        const error = new Error(data.error || "Request failed");
+        error.output = data.output || "";
+        throw error;
       }
       return data;
     }
@@ -1336,7 +1681,7 @@
     }
 
     async function loadDraft(forceReload) {
-      if (state.loading || state.saving) {
+      if (state.loading || state.saving || state.sendExecuting) {
         return;
       }
 
@@ -1380,7 +1725,7 @@
     });
 
     async function loadAnotherDraft() {
-      if (state.loading || state.saving) {
+      if (state.loading || state.saving || state.sendExecuting) {
         return;
       }
 
@@ -1396,6 +1741,8 @@
       }
 
       closeBodyDialog();
+      closeResultDialog();
+      resetSendState();
       setLoadedState(false);
       setStatus("");
       window.setTimeout(() => {
@@ -1410,10 +1757,11 @@
 
     async function saveDraft(options) {
       const interactive = Boolean(options && options.interactive);
-      const showDialog = Boolean(options && options.showDialog);
       const saveMode = interactive ? "manual" : "auto";
+      const busyMessage = (options && options.busyMessage) || "Saving draft...";
+      const successStatus = (options && options.successStatus) || "Draft saved.";
 
-      if (state.loading || state.saving || !elements.messageId.value) {
+      if (state.loading || state.saving || state.sendExecuting || !elements.messageId.value) {
         return null;
       }
 
@@ -1424,7 +1772,7 @@
 
       if (interactive) {
         clearError();
-        setBusy(true, "Saving draft...");
+        setBusy(true, busyMessage);
       }
 
       try {
@@ -1441,22 +1789,15 @@
         }
 
         if (interactive) {
-          setStatus("Draft saved.");
-        }
-
-        if (showDialog) {
-          if (typeof elements.resultDialog.showModal === "function") {
-            elements.resultDialog.showModal();
-          } else {
-            elements.resultDialog.setAttribute("open", "open");
-          }
+          setStatus(successStatus);
         }
 
         return result;
       } catch (error) {
-        showError(String(error.message || error));
+        const message = String(error.message || error);
+        showError(error.output ? `${message}\n\n${error.output}` : message);
         if (!interactive) {
-          state.lastAutoSaveError = String(error.message || error);
+          state.lastAutoSaveError = message;
           state.nextAutoSaveAt = Date.now() + autoSaveDelayMs;
           updateAutosaveStatus();
         }
@@ -1474,6 +1815,107 @@
       }
     }
 
+    async function prepareSendMail() {
+      const result = await saveDraft({
+        interactive: true,
+        busyMessage: "Preparing mail...",
+        successStatus: "Draft ready to send."
+      });
+      if (!result) {
+        return;
+      }
+
+      state.sendResultState = "";
+      state.sendResultSummary = "";
+      state.sendOutput = "";
+      elements.sendOutput.textContent = "";
+      elements.sendOutputSection.hidden = true;
+      updateSendQueue();
+      showReadyToSendDialog();
+    }
+
+    function scheduleDelayedSend() {
+      if (!elements.messageId.value || state.sendExecuting) {
+        return;
+      }
+
+      state.sendQueuedAt = Date.now();
+      state.sendExecuteAt = state.sendQueuedAt + delayedSendWindowMs;
+      state.sendResultState = "";
+      state.sendResultSummary = "";
+      state.sendOutput = "";
+      updateSendQueue();
+      closeResultDialog();
+      setStatus("Mail queued for delayed send.");
+    }
+
+    function cancelScheduledSend() {
+      if (!state.sendExecuteAt || state.sendExecuting) {
+        return;
+      }
+
+      state.sendQueuedAt = 0;
+      state.sendExecuteAt = 0;
+      updateSendQueue();
+      setStatus("Delayed send canceled.");
+    }
+
+    async function executeSend(options) {
+      const showDialogOnFinish = Boolean(options && options.showDialogOnFinish);
+      if (state.loading || state.saving || state.sendExecuting || !elements.messageId.value) {
+        return null;
+      }
+
+      state.sendQueuedAt = 0;
+      state.sendExecuteAt = 0;
+      state.sendExecuting = true;
+      state.sendResultState = "";
+      state.sendResultSummary = "";
+      updateSendQueue();
+      clearError();
+      setStatus("Sending mail...");
+
+      const snapshotSerial = state.changeSerial;
+      try {
+        const result = await postJSON("/api/send", currentDraft());
+        elements.draftPath.value = result.draft_path || elements.draftPath.value;
+        elements.sendCommand.textContent = result.send_command || elements.sendCommand.textContent;
+        elements.sendOutput.textContent = result.output || "";
+        state.sendOutput = result.output || "";
+        state.sendResultState = "success";
+        state.sendResultSummary = `Sent at ${formatClockTime(Date.now())}.`;
+        setCopyButtonLabel("Copy Command");
+        storeIdentity();
+
+        if (state.changeSerial === snapshotSerial) {
+          state.lastAutoSaveAt = Date.now();
+          state.lastAutoSaveError = "";
+          setDirty(false);
+        }
+
+        setStatus("Mail sent.");
+        if (showDialogOnFinish) {
+          showSendResultDialog();
+        }
+        return result;
+      } catch (error) {
+        const message = String(error.message || error);
+        state.sendOutput = error.output || "";
+        elements.sendOutput.textContent = state.sendOutput || "";
+        state.sendResultState = "error";
+        state.sendResultSummary = message;
+        showError(state.sendOutput ? `${message}\n\n${state.sendOutput}` : message);
+        setStatus("Send failed.");
+        if (showDialogOnFinish) {
+          showSendResultDialog();
+        }
+        return null;
+      } finally {
+        state.sendExecuting = false;
+        updateSendQueue();
+      }
+    }
+
     async function autoSaveDraft() {
       if (!state.dirty || !elements.messageId.value || Date.now() < state.nextAutoSaveAt) {
         return;
@@ -1482,21 +1924,60 @@
       await saveDraft({ interactive: false, showDialog: false });
     }
 
+    async function autoSendDraft() {
+      if (!state.sendExecuteAt || state.sendExecuting || Date.now() < state.sendExecuteAt) {
+        return;
+      }
+
+      await executeSend({ showDialogOnFinish: false });
+    }
+
     elements.saveButton.addEventListener("click", async () => {
-      await saveDraft({ interactive: true, showDialog: true });
+      await prepareSendMail();
+    });
+
+    elements.scheduleSendButton.addEventListener("click", () => {
+      scheduleDelayedSend();
+    });
+
+    elements.sendNowButton.addEventListener("click", async () => {
+      closeResultDialog();
+      await executeSend({ showDialogOnFinish: true });
     });
 
     elements.closeDialogButton.addEventListener("click", () => {
-      elements.resultDialog.close();
+      closeResultDialog();
     });
 
-    elements.copyCommandButton.addEventListener("click", async () => {
+    async function handleCopyCommand() {
       try {
         await copySendCommand();
         setCopyButtonLabel("Copied");
       } catch (_error) {
         setCopyButtonLabel("Copy Failed");
       }
+    }
+
+    elements.copyCommandButton.addEventListener("click", handleCopyCommand);
+    elements.sendQueueCopyButton.addEventListener("click", handleCopyCommand);
+    elements.fullscreenSendQueueCopyButton.addEventListener("click", handleCopyCommand);
+    elements.sendQueueNowButton.addEventListener("click", async () => {
+      await executeSend({ showDialogOnFinish: true });
+    });
+    elements.fullscreenSendQueueNowButton.addEventListener("click", async () => {
+      await executeSend({ showDialogOnFinish: true });
+    });
+    elements.sendQueueCancelButton.addEventListener("click", cancelScheduledSend);
+    elements.fullscreenSendQueueCancelButton.addEventListener("click", cancelScheduledSend);
+    elements.sendQueueDetailsButton.addEventListener("click", showSendResultDialog);
+    elements.fullscreenSendQueueDetailsButton.addEventListener("click", showSendResultDialog);
+    elements.sendQueueDismissButton.addEventListener("click", () => {
+      resetSendState();
+      setStatus("");
+    });
+    elements.fullscreenSendQueueDismissButton.addEventListener("click", () => {
+      resetSendState();
+      setStatus("");
     });
 
     [elements.url, elements.fromName, elements.fromEmail, elements.subject, elements.body].forEach((field) => {
@@ -1562,11 +2043,14 @@
     loadStoredIdentity();
     loadStoredBodyTheme();
     setLoadedState(false);
+    updateSendQueue();
     updateAutosaveStatus();
 
     window.setInterval(() => {
       void sendHeartbeat();
       void autoSaveDraft();
+      void autoSendDraft();
+      updateSendQueue();
       updateAutosaveStatus();
     }, 1000);
     void sendHeartbeat();
@@ -1578,7 +2062,7 @@
     }
 
     window.addEventListener("beforeunload", (event) => {
-      if (!state.dirty) {
+      if (!state.dirty && !state.sendExecuteAt && !state.sendExecuting) {
         return;
       }
       event.preventDefault();

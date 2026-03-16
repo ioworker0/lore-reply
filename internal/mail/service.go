@@ -53,6 +53,13 @@ type SaveResult struct {
 	SendCommand string `json:"send_command"`
 }
 
+// SendResult is returned after writing and sending a draft.
+type SendResult struct {
+	DraftPath   string `json:"draft_path"`
+	SendCommand string `json:"send_command"`
+	Output      string `json:"output"`
+}
+
 // B4Error carries the raw command output for UI display.
 type B4Error struct {
 	Output string
@@ -66,9 +73,31 @@ func (e *B4Error) Error() string {
 	return output
 }
 
+// SendError carries git send-email output for UI display.
+type SendError struct {
+	Output string
+	Err    error
+}
+
+func (e *SendError) Error() string {
+	output := strings.TrimSpace(e.Output)
+	if output != "" {
+		return output
+	}
+	if e.Err != nil {
+		return e.Err.Error()
+	}
+	return "git send-email failed"
+}
+
+func (e *SendError) Unwrap() error {
+	return e.Err
+}
+
 // Service wraps the b4 integration and draft file generation.
 type Service struct {
 	B4Path    string
+	GitPath   string
 	DraftsDir string
 }
 
@@ -171,6 +200,26 @@ func (s Service) SaveDraft(draft Draft) (SaveResult, error) {
 		DraftPath:   draftPath,
 		SendCommand: buildSendCommand(draft, draftPath),
 	}, nil
+}
+
+// SendDraft saves the current draft and runs git send-email non-interactively.
+func (s Service) SendDraft(ctx context.Context, draft Draft) (SendResult, error) {
+	saveResult, err := s.SaveDraft(draft)
+	if err != nil {
+		return SendResult{}, err
+	}
+
+	output, err := s.runSendEmail(ctx, draft, saveResult.DraftPath)
+	result := SendResult{
+		DraftPath:   saveResult.DraftPath,
+		SendCommand: saveResult.SendCommand,
+		Output:      string(output),
+	}
+	if err != nil {
+		return result, &SendError{Output: string(output), Err: err}
+	}
+
+	return result, nil
 }
 
 func (s Service) fetchMessage(ctx context.Context, url string) ([]byte, string, error) {
@@ -677,6 +726,41 @@ func removeSavedDraft(draftPath string) error {
 	}
 
 	return nil
+}
+
+func (s Service) runSendEmail(ctx context.Context, draft Draft, draftPath string) ([]byte, error) {
+	gitPath := s.GitPath
+	if strings.TrimSpace(gitPath) == "" {
+		gitPath = "git"
+	}
+
+	cmd := exec.CommandContext(ctx, gitPath, buildSendArgs(draft, draftPath, "never")...)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	return cmd.CombinedOutput()
+}
+
+func buildSendArgs(draft Draft, draftPath, confirm string) []string {
+	args := []string{"send-email"}
+	if strings.TrimSpace(confirm) != "" {
+		args = append(args, "--confirm="+confirm)
+	}
+
+	if from := formatFromHeader(draft.FromName, draft.FromEmail); strings.TrimSpace(from) != "" {
+		args = append(args, "--from="+from)
+	}
+	if draft.MessageID != "" {
+		args = append(args, "--in-reply-to="+draft.MessageID)
+	}
+
+	for _, to := range splitRecipientEmails(draft.To) {
+		args = append(args, "--to="+to)
+	}
+	for _, cc := range splitRecipientEmails(draft.Cc) {
+		args = append(args, "--cc="+cc)
+	}
+
+	args = append(args, draftPath)
+	return args
 }
 
 func buildSendCommand(draft Draft, draftPath string) string {

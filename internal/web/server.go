@@ -29,7 +29,8 @@ type loadRequest struct {
 }
 
 type errorResponse struct {
-	Error string `json:"error"`
+	Error  string `json:"error"`
+	Output string `json:"output,omitempty"`
 }
 
 // New builds the HTTP handler for the lore-reply UI and APIs.
@@ -43,6 +44,7 @@ func New(cfg config.Config) (http.Handler, error) {
 		cfg: cfg,
 		mail: mail.Service{
 			B4Path:    cfg.B4Path,
+			GitPath:   cfg.GitPath,
 			DraftsDir: cfg.DraftsDir,
 		},
 		template: tmpl,
@@ -52,6 +54,7 @@ func New(cfg config.Config) (http.Handler, error) {
 	mux.HandleFunc("GET /", server.handleIndex)
 	mux.HandleFunc("POST /api/load", server.handleLoad)
 	mux.HandleFunc("POST /api/save", server.handleSave)
+	mux.HandleFunc("POST /api/send", server.handleSend)
 	return mux, nil
 }
 
@@ -114,6 +117,34 @@ func (s *server) handleSave(writer http.ResponseWriter, request *http.Request) {
 	writeJSON(writer, http.StatusOK, result)
 }
 
+func (s *server) handleSend(writer http.ResponseWriter, request *http.Request) {
+	var draft mail.Draft
+	if err := json.NewDecoder(request.Body).Decode(&draft); err != nil {
+		writeJSONError(writer, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	draft.FromName = fallback(draft.FromName, s.cfg.FromName)
+	draft.FromEmail = fallback(draft.FromEmail, s.cfg.FromEmail)
+
+	result, err := s.mail.SendDraft(request.Context(), draft)
+	if err != nil {
+		var sendErr *mail.SendError
+		if errors.As(err, &sendErr) {
+			message := "git send-email failed"
+			if strings.TrimSpace(result.Output) == "" {
+				message = sendErr.Error()
+			}
+			writeJSONDetailedError(writer, http.StatusInternalServerError, message, result.Output)
+			return
+		}
+		writeJSONError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, result)
+}
+
 func fallback(value, defaultValue string) string {
 	if strings.TrimSpace(value) == "" {
 		return defaultValue
@@ -128,5 +159,12 @@ func writeJSON(writer http.ResponseWriter, status int, payload any) {
 }
 
 func writeJSONError(writer http.ResponseWriter, status int, message string) {
-	writeJSON(writer, status, errorResponse{Error: message})
+	writeJSONDetailedError(writer, status, message, "")
+}
+
+func writeJSONDetailedError(writer http.ResponseWriter, status int, message, output string) {
+	writeJSON(writer, status, errorResponse{
+		Error:  message,
+		Output: output,
+	})
 }

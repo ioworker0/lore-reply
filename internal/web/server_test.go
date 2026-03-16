@@ -169,6 +169,67 @@ func TestLoadFailureReturnsRawB4Output(t *testing.T) {
 	}
 }
 
+func TestSendFlowReturnsOutput(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+
+	draft := mail.Draft{
+		FromName:  "Alice Example",
+		FromEmail: "alice@example.com",
+		To:        `"Example Author" <author@example.com>`,
+		Subject:   "Re: [PATCH] Example patch",
+		Body:      "reply body",
+		MessageID: "abc.123@example.com",
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(mustJSON(t, draft)))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("send request failed: %d %s", recorder.Code, recorder.Body.String())
+	}
+
+	var result mail.SendResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode send response: %v", err)
+	}
+
+	if !strings.Contains(result.Output, "Result: OK") {
+		t.Fatalf("send output missing success marker:\n%s", result.Output)
+	}
+	if !strings.Contains(result.SendCommand, "git send-email \\") {
+		t.Fatalf("unexpected send command: %s", result.SendCommand)
+	}
+}
+
+func TestSendFailureReturnsCommandOutput(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+
+	draft := mail.Draft{
+		FromName:  "Alice Example",
+		FromEmail: "alice@example.com",
+		To:        "fail@example.com",
+		Subject:   "Re: [PATCH] Example patch",
+		Body:      "reply body",
+		MessageID: "abc.123@example.com",
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(mustJSON(t, draft)))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "simulated send failure") {
+		t.Fatalf("send failure output missing from error response: %s", recorder.Body.String())
+	}
+}
+
 func TestLoadForceReloadIgnoresSavedDraft(t *testing.T) {
 	t.Parallel()
 
@@ -267,8 +328,10 @@ func newTestHandlerWithConfig(t *testing.T, cfg config.Config) http.Handler {
 
 	draftsDir := t.TempDir()
 	b4Path := writeTestB4(t)
+	gitPath, _ := writeTestGit(t)
 
 	cfg.B4Path = b4Path
+	cfg.GitPath = gitPath
 	cfg.DraftsDir = draftsDir
 
 	handler, err := New(cfg)
@@ -327,6 +390,34 @@ EOF
 	}
 
 	return path
+}
+
+func writeTestGit(t *testing.T) (string, string) {
+	t.Helper()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "git")
+	argsPath := filepath.Join(dir, "git.args")
+	script := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$@\" > " + shellQuote(argsPath) + "\n" +
+		"for arg in \"$@\"; do\n" +
+		"\tif [ \"$arg\" = \"--to=fail@example.com\" ]; then\n" +
+		"\t\techo \"simulated send failure\" >&2\n" +
+		"\t\texit 1\n" +
+		"\tfi\n" +
+		"done\n" +
+		"echo \"Sendmail: fake-sendmail $*\"\n" +
+		"echo \"Result: OK\"\n"
+
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write test git: %v", err)
+	}
+
+	return path, argsPath
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func mustJSON(t *testing.T, payload any) []byte {

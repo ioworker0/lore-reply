@@ -2,7 +2,7 @@
 
 `lore-reply` is a local single-user web tool for replying to a patch mail from `lore.kernel.org` without manually rebuilding the reply draft each time.
 
-It uses `b4` to fetch one target message, turns it into an editable plain-text reply draft, saves that draft under `/tmp/lore-reply/drafts/`, and shows a ready-to-run `git send-email` command.
+It uses `b4` to fetch one target message, turns it into an editable plain-text reply draft, saves that draft under `/tmp/lore-reply/drafts/`, and either shows a ready-to-run `git send-email` command or sends it directly from the page.
 
 ## Features
 
@@ -20,7 +20,9 @@ It uses `b4` to fetch one target message, turns it into an editable plain-text r
 - Existing saved drafts are restored when you load the same lore URL again
 - `Reload` discards the current saved draft state and fetches a fresh draft from lore
 - `Load Another` returns to the URL input so you can switch to a different mail
-- Save result dialog with a copy button for the generated `git send-email` command
+- Send dialog with direct send, 30-second delayed send, and command copy actions
+- Delayed-send progress bar with cancel support in both the main view and the full-screen body editor
+- Direct-send result output from `git send-email` shown in the UI
 - `From Name` and `From Email` are saved in local browser storage after a successful save
 - Optional idle-exit mode driven by page heartbeat
 - Automatic draft save every 5 seconds while there are unsaved changes
@@ -30,7 +32,6 @@ It uses `b4` to fetch one target message, turns it into an editable plain-text r
 Current scope is intentionally small:
 
 - one loaded draft at a time
-- no direct mail sending from the web UI
 - no draft list
 - no thread management beyond replying to a single lore message
 
@@ -38,7 +39,7 @@ Current scope is intentionally small:
 
 - Go `1.24` or newer
 - `b4` available in `PATH`, or an explicit path passed with `--b4`
-- `git send-email` installed if you want to send the saved draft
+- `git send-email` installed if you want to send the saved draft or send directly from the web UI
 
 ## Build
 
@@ -116,9 +117,10 @@ If `--exit-on-idle` is also provided, the page sends a heartbeat every 5 seconds
 3. `lore-reply` calls `b4 mbox --single-message` and builds an editable reply draft.
 4. Edit `From`, recipients, subject, and body.
 5. Dirty drafts are auto-saved every 5 seconds.
-6. Click `Save` at any time for an immediate save and a ready-to-run `git send-email` command.
-7. The draft is written under `/tmp/lore-reply/drafts/`.
-8. Copy the generated `git send-email` command and run it in your shell.
+6. Click `Send Mail` to save the draft and open the send dialog.
+7. Choose `Send in 30s`, `Send Now`, or `Copy Command`.
+8. Delayed sends stay visible in the top progress bar and can be canceled before they fire.
+9. The draft is written under `/tmp/lore-reply/drafts/` before sending.
 
 With `--url`, steps `1` and `2` are performed automatically after startup.
 
@@ -140,6 +142,8 @@ The same loaded draft overwrites the same file on repeated saves.
 
 Each saved draft also writes a small metadata sidecar so custom `To` and `Cc` changes can be restored together with the saved body.
 
+Direct sends use `git send-email --confirm=never`, so they do not stop on the interactive `Send this email?` prompt. The command output is returned to the UI whether the send succeeds or fails.
+
 ## Notes
 
 - The UI is designed for kernel-style plain-text mail replies.
@@ -148,3 +152,4 @@ Each saved draft also writes a small metadata sidecar so custom `To` and `Cc` ch
 - The app binds to localhost by default and is meant to be used as a local tool.
 - When a loaded draft is dirty, the page auto-saves it to disk every 5 seconds.
 - Auto-save reduces accidental loss, but the most recent unsaved keystrokes can still be lost if the browser exits before the next save window.
+- Direct sending is non-interactive. If your `git send-email` setup still requires terminal prompts for SMTP credentials or other input, the send will fail and the raw output is shown in the page.

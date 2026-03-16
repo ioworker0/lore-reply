@@ -2,6 +2,7 @@ package mail
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -219,6 +220,97 @@ func TestLoadDraftRestoresSavedDraft(t *testing.T) {
 	}
 }
 
+func TestSendDraft(t *testing.T) {
+	t.Parallel()
+
+	gitPath, argsPath := writeTestGit(t)
+	service := Service{
+		GitPath:   gitPath,
+		DraftsDir: t.TempDir(),
+	}
+
+	draft := Draft{
+		FromName:  "Alice Example",
+		FromEmail: "alice@example.com",
+		To:        `"Example Author" <author@example.com>`,
+		Cc:        `linux-mm@kvack.org, Jane Doe <jane@example.com>`,
+		Subject:   "Re: [PATCH] Example patch",
+		Body:      "reply body",
+		MessageID: "abc.123@example.com",
+	}
+
+	result, err := service.SendDraft(context.Background(), draft)
+	if err != nil {
+		t.Fatalf("SendDraft returned error: %v", err)
+	}
+
+	if !strings.Contains(result.Output, "Result: OK") {
+		t.Fatalf("send output missing success marker:\n%s", result.Output)
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read git args: %v", err)
+	}
+	args := string(argsData)
+	for _, want := range []string{
+		"send-email\n",
+		"--confirm=never\n",
+		"--from=Alice Example <alice@example.com>\n",
+		"--in-reply-to=abc.123@example.com\n",
+		"--to=author@example.com\n",
+		"--cc=linux-mm@kvack.org\n",
+		"--cc=jane@example.com\n",
+	} {
+		if !strings.Contains(args, want) {
+			t.Fatalf("git args missing %q:\n%s", want, args)
+		}
+	}
+
+	savedData, err := os.ReadFile(result.DraftPath)
+	if err != nil {
+		t.Fatalf("read saved draft: %v", err)
+	}
+	if !strings.Contains(string(savedData), "reply body") {
+		t.Fatalf("saved draft missing reply body:\n%s", string(savedData))
+	}
+}
+
+func TestSendDraftReturnsOutputOnFailure(t *testing.T) {
+	t.Parallel()
+
+	gitPath, _ := writeTestGit(t)
+	service := Service{
+		GitPath:   gitPath,
+		DraftsDir: t.TempDir(),
+	}
+
+	draft := Draft{
+		FromName:  "Alice Example",
+		FromEmail: "alice@example.com",
+		To:        "fail@example.com",
+		Subject:   "Re: [PATCH] Example patch",
+		Body:      "reply body",
+		MessageID: "abc.123@example.com",
+	}
+
+	result, err := service.SendDraft(context.Background(), draft)
+	if err == nil {
+		t.Fatal("SendDraft unexpectedly succeeded")
+	}
+
+	var sendErr *SendError
+	if !errors.As(err, &sendErr) {
+		t.Fatalf("SendDraft returned wrong error type: %T", err)
+	}
+	if !strings.Contains(sendErr.Output, "simulated send failure") {
+		t.Fatalf("send error output missing failure marker:\n%s", sendErr.Output)
+	}
+	if !strings.Contains(result.Output, "simulated send failure") {
+		t.Fatalf("partial send result missing failure output:\n%s", result.Output)
+	}
+}
+
 func writeTestB4(t *testing.T) string {
 	t.Helper()
 
@@ -267,4 +359,32 @@ EOF
 	}
 
 	return path
+}
+
+func writeTestGit(t *testing.T) (string, string) {
+	t.Helper()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "git")
+	argsPath := filepath.Join(dir, "git.args")
+	script := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$@\" > " + shellQuote(argsPath) + "\n" +
+		"for arg in \"$@\"; do\n" +
+		"\tif [ \"$arg\" = \"--to=fail@example.com\" ]; then\n" +
+		"\t\techo \"simulated send failure\" >&2\n" +
+		"\t\texit 1\n" +
+		"\tfi\n" +
+		"done\n" +
+		"echo \"Sendmail: fake-sendmail $*\"\n" +
+		"echo \"Result: OK\"\n"
+
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write test git: %v", err)
+	}
+
+	return path, argsPath
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }

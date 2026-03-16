@@ -19,6 +19,7 @@ const (
 // Config holds the resolved runtime settings.
 type Config struct {
 	B4Path      string
+	GitPath     string
 	FromName    string
 	FromEmail   string
 	Listen      string
@@ -40,9 +41,14 @@ func Load() (Config, error) {
 
 	flag.Parse()
 
-	resolvedB4, err := resolveExecutable(*b4Path)
+	resolvedB4, err := resolveExecutable(*b4Path, "b4")
 	if err != nil {
 		return Config{}, fmt.Errorf("resolve b4: %w", err)
+	}
+
+	resolvedGit, err := resolveExecutable("", "git")
+	if err != nil {
+		return Config{}, fmt.Errorf("resolve git: %w", err)
 	}
 
 	if err := os.MkdirAll(defaultDraftDir, 0o755); err != nil {
@@ -56,6 +62,7 @@ func Load() (Config, error) {
 
 	return Config{
 		B4Path:      resolvedB4,
+		GitPath:     resolvedGit,
 		FromName:    *fromName,
 		FromEmail:   *fromEmail,
 		Listen:      *listen,
@@ -65,8 +72,8 @@ func Load() (Config, error) {
 	}, nil
 }
 
-func resolveExecutable(provided string) (string, error) {
-	candidate := "b4"
+func resolveExecutable(provided, fallback string) (string, error) {
+	candidate := fallback
 	if provided != "" {
 		candidate = provided
 	}
