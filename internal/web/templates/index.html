@@ -753,6 +753,7 @@
 
       <div id="composer" hidden>
         <div class="composer-toolbar">
+          <button id="openLoreButton" type="button" class="secondary">Open Lore</button>
           <button id="reloadButton" type="button" class="secondary">Reload</button>
           <button id="loadAnotherButton" type="button" class="secondary">Load Another</button>
         </div>
@@ -976,6 +977,7 @@
       bodyCloseButton: document.getElementById("bodyCloseButton"),
       messageId: document.getElementById("messageId"),
       loadButton: document.getElementById("loadButton"),
+      openLoreButton: document.getElementById("openLoreButton"),
       reloadButton: document.getElementById("reloadButton"),
       loadAnotherButton: document.getElementById("loadAnotherButton"),
       saveButton: document.getElementById("saveButton"),
@@ -1080,6 +1082,7 @@
     function setLoadedState(loaded) {
       elements.loadStage.hidden = loaded;
       elements.composer.hidden = !loaded;
+      updateOpenLoreButton();
     }
 
     function clearError() {
@@ -1132,10 +1135,29 @@
 
     function setBusy(busy, action) {
       elements.loadButton.disabled = busy;
+      updateOpenLoreButton();
       elements.reloadButton.disabled = busy;
       elements.loadAnotherButton.disabled = busy;
       elements.saveButton.disabled = busy;
       setStatus(busy ? action : "");
+    }
+
+    function currentSourceURL() {
+      const sourceURL = (elements.url.value || "").trim();
+      if (!sourceURL) {
+        return "";
+      }
+
+      try {
+        const parsed = new URL(sourceURL);
+        return /^https?:$/.test(parsed.protocol) ? parsed.href : "";
+      } catch (_error) {
+        return "";
+      }
+    }
+
+    function updateOpenLoreButton() {
+      elements.openLoreButton.disabled = !currentSourceURL() || state.loading;
     }
 
     function setCopyButtonLabel(label) {
@@ -1579,6 +1601,7 @@
     function hydrateDraft(draft) {
       state.hydrating = true;
       closeResultDialog();
+      elements.url.value = draft.source_url || elements.url.value;
       elements.fromName.value = draft.from_name || elements.fromName.value;
       elements.fromEmail.value = draft.from_email || elements.fromEmail.value;
       state.recipients.to = splitRecipientText(draft.to || "");
@@ -1598,6 +1621,7 @@
       setCopyButtonLabel("Copy Command");
       resetSendState();
       setDirty(false);
+      updateOpenLoreButton();
     }
 
     function currentDraft() {
@@ -1609,7 +1633,8 @@
         subject: elements.subject.value,
         body: elements.body.value,
         message_id: elements.messageId.value,
-        draft_path: elements.draftPath.value
+        draft_path: elements.draftPath.value,
+        source_url: currentSourceURL()
       };
     }
 
@@ -1709,6 +1734,14 @@
 
     elements.loadButton.addEventListener("click", () => {
       void loadDraft(false);
+    });
+
+    elements.openLoreButton.addEventListener("click", () => {
+      const sourceURL = currentSourceURL();
+      if (!sourceURL) {
+        return;
+      }
+      window.open(sourceURL, "_blank", "noopener,noreferrer");
     });
 
     async function reloadDraft() {
@@ -2042,6 +2075,7 @@
 
     loadStoredIdentity();
     loadStoredBodyTheme();
+    elements.url.addEventListener("input", updateOpenLoreButton);
     setLoadedState(false);
     updateSendQueue();
     updateAutosaveStatus();

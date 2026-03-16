@@ -29,6 +29,9 @@ func TestIndexRendersDefaults(t *testing.T) {
 	if !strings.Contains(recorder.Body.String(), "nobody@kernel.org") {
 		t.Fatalf("response does not include default sender email:\n%s", recorder.Body.String())
 	}
+	if !strings.Contains(recorder.Body.String(), `id="openLoreButton"`) {
+		t.Fatalf("response does not include open lore button:\n%s", recorder.Body.String())
+	}
 }
 
 func TestIndexRendersAutoLoadURL(t *testing.T) {
@@ -91,6 +94,9 @@ func TestLoadAndSaveFlow(t *testing.T) {
 	}
 	if !filepath.IsAbs(draft.DraftPath) {
 		t.Fatalf("draft path is not absolute: %q", draft.DraftPath)
+	}
+	if draft.SourceURL != "https://lore.kernel.org/linux-mm/test" {
+		t.Fatalf("unexpected source url: %q", draft.SourceURL)
 	}
 
 	draft.Body = draft.Body + "\nLooks good to me."
