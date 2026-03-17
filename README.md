@@ -108,7 +108,7 @@ http://127.0.0.1:9110
 
 If `--url` is provided, `lore-reply` opens the browser on startup and automatically runs the page `Load` step for that URL.
 
-If `--exit-on-idle` is also provided, the page sends a heartbeat every 5 seconds and the server shuts down automatically after the heartbeat disappears for a short idle window.
+If `--exit-on-idle` is also provided, the page sends a heartbeat every 5 seconds and the server shuts down automatically after the heartbeat disappears for 10 minutes.
 
 ## Workflow
 

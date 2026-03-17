@@ -19,7 +19,7 @@ import (
 
 const (
 	heartbeatPath     = "/api/heartbeat"
-	idleTimeout       = 20 * time.Second
+	idleTimeout       = 10 * time.Minute
 	idleCheckInterval = 5 * time.Second
 )
 
