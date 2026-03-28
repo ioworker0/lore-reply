@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/ioworker0/lore-reply/internal/config"
+	"github.com/ioworker0/lore-reply/internal/inbox"
 	"github.com/ioworker0/lore-reply/internal/mail"
 )
 
@@ -53,6 +55,69 @@ func TestIndexRendersAutoLoadURL(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), `value="https://lore.kernel.org/linux-mm/test"`) {
 		t.Fatalf("response does not include auto-load URL:\n%s", recorder.Body.String())
+	}
+}
+
+func TestInboxSyncAndDetailFlow(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+
+	syncBody := mustJSON(t, inbox.SyncOptions{
+		ListURL:     "https://lore.kernel.org/linux-mm/",
+		MyEmails:    []string{"alice@example.com"},
+		RangeDays:   90,
+		MatchMode:   inbox.MatchModeAllRelated,
+		MaxMessages: 20,
+	})
+
+	syncRequest := httptest.NewRequest(http.MethodPost, "/api/inbox/sync", bytes.NewReader(syncBody))
+	syncRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(syncRecorder, syncRequest)
+
+	if syncRecorder.Code != http.StatusOK {
+		t.Fatalf("sync request failed: %d %s", syncRecorder.Code, syncRecorder.Body.String())
+	}
+
+	var result inbox.SyncResult
+	if err := json.Unmarshal(syncRecorder.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode sync result: %v", err)
+	}
+	if len(result.Threads) != 1 {
+		t.Fatalf("unexpected thread count: %#v", result)
+	}
+	if result.Threads[0].ID != "abc.123@example.com" {
+		t.Fatalf("unexpected thread id: %#v", result.Threads[0])
+	}
+	if !strings.Contains(strings.Join(result.Threads[0].MatchReasons, ","), "to/cc me") {
+		t.Fatalf("expected merged match reasons in thread summary: %#v", result.Threads[0])
+	}
+
+	listRequest := httptest.NewRequest(http.MethodGet, "/api/inbox/threads", nil)
+	listRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(listRecorder, listRequest)
+
+	if listRecorder.Code != http.StatusOK {
+		t.Fatalf("list request failed: %d %s", listRecorder.Code, listRecorder.Body.String())
+	}
+
+	detailRequest := httptest.NewRequest(http.MethodGet, "/api/inbox/thread?id=abc.123@example.com", nil)
+	detailRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(detailRecorder, detailRequest)
+
+	if detailRecorder.Code != http.StatusOK {
+		t.Fatalf("detail request failed: %d %s", detailRecorder.Code, detailRecorder.Body.String())
+	}
+
+	var detail inbox.ThreadDetail
+	if err := json.Unmarshal(detailRecorder.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode thread detail: %v", err)
+	}
+	if len(detail.Messages) != 1 {
+		t.Fatalf("unexpected message count: %#v", detail)
+	}
+	if detail.Messages[0].URL != "https://lore.kernel.org/r/abc.123@example.com" {
+		t.Fatalf("unexpected message url: %#v", detail.Messages[0])
 	}
 }
 
@@ -335,17 +400,38 @@ func newTestHandlerWithConfig(t *testing.T, cfg config.Config) http.Handler {
 	draftsDir := t.TempDir()
 	b4Path := writeTestB4(t)
 	gitPath, _ := writeTestGit(t)
+	mailService := mail.Service{
+		B4Path:    b4Path,
+		GitPath:   gitPath,
+		DraftsDir: draftsDir,
+	}
+	inboxService := &inbox.Service{
+		StorePath:  defaultInboxStorePath(draftsDir),
+		Discoverer: testDiscoverer{},
+		Loader:     mailService,
+	}
 
 	cfg.B4Path = b4Path
 	cfg.GitPath = gitPath
 	cfg.DraftsDir = draftsDir
 
-	handler, err := New(cfg)
+	handler, err := newHandler(cfg, mailService, inboxService)
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
 
 	return handler
+}
+
+type testDiscoverer struct{}
+
+func (testDiscoverer) Discover(_ context.Context, query inbox.DiscoveryQuery) ([]inbox.SearchHit, error) {
+	if !strings.Contains(query.Query, "alice@example.com") {
+		return nil, nil
+	}
+	return []inbox.SearchHit{
+		{URL: "https://lore.kernel.org/r/abc.123@example.com"},
+	}, nil
 }
 
 func writeTestB4(t *testing.T) string {

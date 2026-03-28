@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/ioworker0/lore-reply/internal/config"
 )
 
 func TestBrowserURL(t *testing.T) {
@@ -62,5 +64,17 @@ func TestWithIdleSupportHeartbeat(t *testing.T) {
 	}
 	if tracker.IdleFor(time.Now()) > time.Second {
 		t.Fatalf("heartbeat did not refresh tracker activity")
+	}
+}
+
+func TestShouldOpenBrowser(t *testing.T) {
+	t.Parallel()
+
+	if !shouldOpenBrowser(config.Config{}) {
+		t.Fatal("expected browser to open by default")
+	}
+
+	if !shouldOpenBrowser(config.Config{AutoLoadURL: "https://lore.kernel.org/linux-mm/test"}) {
+		t.Fatal("expected browser to open when auto-load URL is set")
 	}
 }

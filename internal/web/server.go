@@ -6,9 +6,12 @@ import (
 	"errors"
 	"html/template"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ioworker0/lore-reply/internal/config"
+	"github.com/ioworker0/lore-reply/internal/inbox"
 	"github.com/ioworker0/lore-reply/internal/mail"
 )
 
@@ -19,6 +22,7 @@ type pageData struct {
 	DefaultFromName  string
 	DefaultFromEmail string
 	AutoLoadURL      string
+	DefaultInboxList string
 }
 
 type loadRequest struct {
@@ -35,23 +39,39 @@ type errorResponse struct {
 
 // New builds the HTTP handler for the lore-reply UI and APIs.
 func New(cfg config.Config) (http.Handler, error) {
+	mailService := mail.Service{
+		B4Path:    cfg.B4Path,
+		GitPath:   cfg.GitPath,
+		DraftsDir: cfg.DraftsDir,
+	}
+
+	inboxService := &inbox.Service{
+		StorePath:  defaultInboxStorePath(cfg.DraftsDir),
+		Discoverer: inbox.HTTPDiscoverer{},
+		Loader:     mailService,
+	}
+
+	return newHandler(cfg, mailService, inboxService)
+}
+
+func newHandler(cfg config.Config, mailService mail.Service, inboxService *inbox.Service) (http.Handler, error) {
 	tmpl, err := template.ParseFS(templateFS, "templates/index.html")
 	if err != nil {
 		return nil, err
 	}
 
 	server := &server{
-		cfg: cfg,
-		mail: mail.Service{
-			B4Path:    cfg.B4Path,
-			GitPath:   cfg.GitPath,
-			DraftsDir: cfg.DraftsDir,
-		},
+		cfg:      cfg,
+		mail:     mailService,
+		inbox:    inboxService,
 		template: tmpl,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", server.handleIndex)
+	mux.HandleFunc("GET /api/inbox/threads", server.handleInboxThreads)
+	mux.HandleFunc("GET /api/inbox/thread", server.handleInboxThread)
+	mux.HandleFunc("POST /api/inbox/sync", server.handleInboxSync)
 	mux.HandleFunc("POST /api/load", server.handleLoad)
 	mux.HandleFunc("POST /api/save", server.handleSave)
 	mux.HandleFunc("POST /api/send", server.handleSend)
@@ -61,6 +81,7 @@ func New(cfg config.Config) (http.Handler, error) {
 type server struct {
 	cfg      config.Config
 	mail     mail.Service
+	inbox    *inbox.Service
 	template *template.Template
 }
 
@@ -69,7 +90,45 @@ func (s *server) handleIndex(writer http.ResponseWriter, request *http.Request) 
 		DefaultFromName:  s.cfg.FromName,
 		DefaultFromEmail: s.cfg.FromEmail,
 		AutoLoadURL:      s.cfg.AutoLoadURL,
+		DefaultInboxList: inbox.DefaultListURL,
 	})
+}
+
+func (s *server) handleInboxThreads(writer http.ResponseWriter, request *http.Request) {
+	result, err := s.inbox.ListThreads()
+	if err != nil {
+		writeJSONError(writer, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, result)
+}
+
+func (s *server) handleInboxThread(writer http.ResponseWriter, request *http.Request) {
+	thread, err := s.inbox.GetThread(request.URL.Query().Get("id"))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeJSONError(writer, http.StatusNotFound, "thread not found")
+			return
+		}
+		writeJSONError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, thread)
+}
+
+func (s *server) handleInboxSync(writer http.ResponseWriter, request *http.Request) {
+	var payload inbox.SyncOptions
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeJSONError(writer, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	result, err := s.inbox.Sync(request.Context(), payload)
+	if err != nil {
+		writeJSONError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(writer, http.StatusOK, result)
 }
 
 func (s *server) handleLoad(writer http.ResponseWriter, request *http.Request) {
@@ -167,4 +226,8 @@ func writeJSONDetailedError(writer http.ResponseWriter, status int, message, out
 		Error:  message,
 		Output: output,
 	})
+}
+
+func defaultInboxStorePath(draftsDir string) string {
+	return filepath.Join(filepath.Dir(draftsDir), "inbox-state.json")
 }

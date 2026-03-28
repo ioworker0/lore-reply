@@ -9,7 +9,8 @@ It uses `b4` to fetch one target message, turns it into an editable plain-text r
 - Single Go binary
 - Local-only web UI by default on `127.0.0.1:9110`
 - `b4` integration with startup validation
-- Optional startup URL with automatic browser open and auto-load
+- Browser opens automatically on startup
+- Optional startup URL with automatic auto-load
 - Plain-text editor with monospace fonts and a 72-column ruler
 - Full-screen body editor for long replies
 - Editable `From`, `To`, `Cc`, `Subject`, and `Body`
@@ -26,14 +27,19 @@ It uses `b4` to fetch one target message, turns it into an editable plain-text r
 - `From Name` and `From Email` are saved in local browser storage after a successful save
 - Optional idle-exit mode driven by page heartbeat
 - Automatic draft save every 5 seconds while there are unsaved changes
+- Inbox view for syncing related lore threads from a mailing list
+- Inbox filters for mailing list, your email addresses, time range, and match mode
+- Thread-first inbox browser with per-message thread tree and jump back into the reply composer
+- Collapsible inbox thread list for reading long message bodies
 
 ## Scope
 
 Current scope is intentionally small:
 
-- one loaded draft at a time
-- no draft list
-- no thread management beyond replying to a single lore message
+- one composer draft at a time
+- one local inbox cache snapshot at a time
+- no server-side user accounts or shared state
+- no historical inbox merge yet; each sync replaces the previous inbox cache snapshot
 
 ## Requirements
 
@@ -106,11 +112,11 @@ Then open:
 http://127.0.0.1:9110
 ```
 
-If `--url` is provided, `lore-reply` opens the browser on startup and automatically runs the page `Load` step for that URL.
+`lore-reply` opens the browser on startup. If `--url` is provided, it also automatically runs the page `Load` step for that URL.
 
 If `--exit-on-idle` is also provided, the page sends a heartbeat every 5 seconds and the server shuts down automatically after the heartbeat disappears for 10 minutes.
 
-## Workflow
+## Direct Reply Workflow
 
 1. Paste a `lore.kernel.org` message URL into the page.
 2. Click `Load`.
@@ -127,6 +133,25 @@ With `--url`, steps `1` and `2` are performed automatically after startup.
 If you load the same lore URL again later, `lore-reply` restores the saved draft from `/tmp/lore-reply/drafts/` instead of overwriting it.
 
 Use `Reload` in the top-right corner if you want to discard the current saved draft state and fetch a fresh copy from lore.
+
+## Inbox Workflow
+
+1. Open the `Inbox` view.
+2. Set the mailing list URL, your email addresses, range, and match mode.
+3. Click `Sync`.
+4. `lore-reply` searches lore/public-inbox for matching messages, expands them into full threads with `b4`, and stores a local inbox cache.
+5. Browse the left-hand thread list, inspect the selected message at the top-right, and use the thread tree below it to move through replies.
+6. Click `Reply In Composer` on any message to jump back into the existing direct-reply editor.
+
+## Inbox Cache
+
+Inbox sync state is stored locally at:
+
+```text
+/tmp/lore-reply/inbox-state.json
+```
+
+Current behavior is replace-on-sync, not merge-on-sync. A successful new sync overwrites the previous inbox cache snapshot.
 
 ## Draft Output
 
@@ -153,3 +178,4 @@ Direct sends use `git send-email --confirm=never`, so they do not stop on the in
 - When a loaded draft is dirty, the page auto-saves it to disk every 5 seconds.
 - Auto-save reduces accidental loss, but the most recent unsaved keystrokes can still be lost if the browser exits before the next save window.
 - Direct sending is non-interactive. If your `git send-email` setup still requires terminal prompts for SMTP credentials or other input, the send will fail and the raw output is shown in the page.
+- Inbox sync uses a local JSON cache today, not SQLite.

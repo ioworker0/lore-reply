@@ -59,7 +59,7 @@ func main() {
 		go shutdownOnIdle(server, tracker)
 	}
 
-	if cfg.AutoLoadURL != "" {
+	if shouldOpenBrowser(cfg) {
 		if err := openBrowser(baseURL); err != nil {
 			log.Printf("Could not open browser automatically: %v", err)
 		}
@@ -151,6 +151,10 @@ func browserURL(address string) string {
 	}
 
 	return "http://" + net.JoinHostPort(host, port)
+}
+
+func shouldOpenBrowser(cfg config.Config) bool {
+	return true
 }
 
 func openBrowser(url string) error {

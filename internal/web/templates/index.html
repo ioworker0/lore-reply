@@ -76,6 +76,30 @@
       gap: 12px;
     }
 
+    .view-switch {
+      display: inline-flex;
+      gap: 8px;
+      margin-bottom: 18px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 253, 250, 0.7);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+
+    .view-tab {
+      border: 0;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .view-tab.active {
+      background: var(--text);
+      color: #fff;
+    }
+
     .toolbar {
       grid-template-columns: minmax(0, 1fr) auto;
       margin-bottom: 16px;
@@ -187,6 +211,40 @@
       color: var(--text);
       padding: var(--editor-pad-y) var(--editor-pad-x);
       font-size: var(--editor-font-size);
+    }
+
+    select {
+      width: 100%;
+      border: 1px solid #c7beb1;
+      border-radius: 10px;
+      background-color: #fffdfa;
+      background-image:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(244, 238, 227, 0.92)),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2375685d' d='M1.4.9 6 5.4 10.6.9 12 2.3 6 8 0 2.3z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat, no-repeat;
+      background-position: 0 0, right 12px center;
+      background-size: auto, 12px 8px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+      color: var(--text);
+      padding: 11px 40px 11px 12px;
+      font-size: 13px;
+      line-height: 1.35;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+    }
+
+    select:hover {
+      border-color: #b9ae9d;
+      background-color: #fff;
+    }
+
+    select:focus {
+      outline: none;
+      border-color: rgba(155, 44, 44, 0.55);
+      box-shadow: 0 0 0 3px rgba(155, 44, 44, 0.12);
     }
 
     input[readonly] {
@@ -723,10 +781,377 @@
       line-height: 1.5;
     }
 
+    .inbox-toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) auto;
+      grid-template-areas:
+        "list emails sync"
+        "range mode .";
+      gap: 12px;
+      margin-bottom: 16px;
+      align-items: end;
+    }
+
+    .inbox-toolbar .field {
+      min-width: 0;
+    }
+
+    .inbox-toolbar-list {
+      grid-area: list;
+    }
+
+    .inbox-toolbar-emails {
+      grid-area: emails;
+    }
+
+    .inbox-toolbar-range {
+      grid-area: range;
+    }
+
+    .inbox-toolbar-mode {
+      grid-area: mode;
+    }
+
+    .inbox-toolbar-sync {
+      grid-area: sync;
+      align-self: end;
+      margin-bottom: 1px;
+    }
+
+    .inbox-layout {
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+      gap: 16px;
+      min-height: 32rem;
+    }
+
+    .inbox-layout.sidebar-collapsed {
+      grid-template-columns: 56px minmax(0, 1fr);
+    }
+
+    .inbox-sidebar,
+    .inbox-detail-shell {
+      min-height: 0;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .inbox-sidebar {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 8px;
+      overflow: auto;
+      padding: 8px;
+    }
+
+    .inbox-sidebar-head {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .sidebar-toggle {
+      width: 100%;
+      padding: 9px 10px;
+      font-size: 11px;
+    }
+
+    .inbox-layout.sidebar-collapsed .inbox-sidebar {
+      overflow: hidden;
+      padding: 8px 6px;
+    }
+
+    .inbox-layout.sidebar-collapsed .inbox-sidebar-head {
+      justify-content: center;
+    }
+
+    .inbox-layout.sidebar-collapsed .sidebar-toggle {
+      padding: 10px 6px;
+      font-size: 10px;
+    }
+
+    .inbox-layout.sidebar-collapsed #inboxThreads,
+    .inbox-layout.sidebar-collapsed #inboxThreadsEmpty {
+      display: none !important;
+    }
+
+    .inbox-detail-shell {
+      padding: 18px;
+      overflow: auto;
+    }
+
+    .empty-state {
+      display: grid;
+      place-items: center;
+      min-height: 12rem;
+      padding: 18px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .thread-list {
+      display: block;
+    }
+
+    .thread-item {
+      display: grid;
+      gap: 5px;
+      padding: 10px 8px 10px 12px;
+      border: 0;
+      border-left: 3px solid transparent;
+      border-radius: 0;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+      appearance: none;
+      -webkit-appearance: none;
+      box-shadow: none;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+
+    .thread-item + .thread-item {
+      border-top: 1px solid rgba(199, 190, 177, 0.5);
+    }
+
+    .thread-item:hover {
+      border-left-color: #d7cdbd;
+      background: #f8f4ec;
+    }
+
+    .thread-item.active {
+      border-left-color: var(--accent);
+      background: rgba(155, 44, 44, 0.06);
+      box-shadow: none;
+    }
+
+    .thread-item:focus-visible {
+      outline: none;
+      border-left-color: var(--accent);
+    }
+
+    .thread-item h3,
+    .thread-head h2 {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .thread-meta,
+    .message-meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .thread-meta {
+      display: grid;
+      gap: 1px;
+    }
+
+    .thread-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(31, 26, 23, 0.08);
+      color: var(--text);
+      font-size: 9px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .badge.hot {
+      background: rgba(155, 44, 44, 0.12);
+      color: #7f1d1d;
+    }
+
+    .thread-head {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .message-view {
+      min-height: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fffdfa;
+    }
+
+    .message-view {
+      padding: 18px;
+      overflow: auto;
+      margin-bottom: 16px;
+    }
+
+    .thread-tree-title {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .thread-tree-shell {
+      margin-top: 6px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .message-tree {
+      display: grid;
+      gap: 2px;
+    }
+
+    .message-node {
+      width: 100%;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      padding: 0;
+      transition: color 120ms ease, background 120ms ease;
+    }
+
+    .message-node:hover {
+      background: transparent;
+      color: var(--accent);
+      transform: none;
+    }
+
+    .message-node.active {
+      background: transparent;
+      color: var(--accent);
+    }
+
+    .message-node-body {
+      display: grid;
+      gap: 2px;
+      padding: 4px 0;
+    }
+
+    .message-node-subject {
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .message-node-meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .message-node.active .message-node-subject {
+      font-weight: 700;
+    }
+
+    .message-node.active .message-node-meta {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .message-node.axis .message-node-subject {
+      font-weight: 600;
+    }
+
+    .message-node.axis .message-node-meta {
+      margin-top: 1px;
+    }
+
+    .message-view.hit {
+      border-color: rgba(155, 44, 44, 0.34);
+      background: rgba(155, 44, 44, 0.05);
+    }
+
+    .message-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .message-copy {
+      display: grid;
+      gap: 8px;
+    }
+
+    .message-copy h3 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.45;
+    }
+
+    .message-fields {
+      display: grid;
+      gap: 4px;
+    }
+
+    .message-field {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .message-field-label {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .message-field-value {
+      min-width: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .message-field-value-list {
+      display: grid;
+      gap: 2px;
+    }
+
+    .message-field-value-more {
+      color: var(--muted);
+    }
+
+    .message-actions {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .message-body {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
     @media (max-width: 860px) {
       .toolbar,
-      .grid {
+      .grid,
+      .inbox-toolbar,
+      .inbox-layout {
         grid-template-columns: 1fr;
+        grid-template-areas:
+          "list"
+          "emails"
+          "range"
+          "mode"
+          "sync";
       }
 
       .send-queue-head {
@@ -743,105 +1168,181 @@
         <p>Load one lore patch mail, edit the reply inline, save it into <code>/tmp/lore-reply/drafts/</code>, and either copy the generated <code>git send-email</code> command or send it directly from the page.</p>
       </div>
 
-      <div id="loadStage" class="toolbar">
-        <label class="field field-wide">
-          <span>Lore URL</span>
-          <input id="url" type="text" value="{{ .AutoLoadURL }}" placeholder="https://lore.kernel.org/linux-mm/..." autocomplete="off" spellcheck="false">
-        </label>
-        <button id="loadButton" type="button">Load</button>
+      <div class="view-switch" role="tablist" aria-label="Views">
+        <button id="directReplyTab" type="button" class="view-tab active" aria-selected="true">Direct Reply</button>
+        <button id="inboxTab" type="button" class="view-tab" aria-selected="false">Inbox</button>
       </div>
 
-      <div id="composer" hidden>
-        <div class="composer-toolbar">
-          <button id="openLoreButton" type="button" class="secondary">Open Lore</button>
-          <button id="reloadButton" type="button" class="secondary">Reload</button>
-          <button id="loadAnotherButton" type="button" class="secondary">Load Another</button>
-        </div>
-        <div class="grid">
-          <label class="field">
-            <span class="field-head">
-              <span>From Name</span>
-              <span class="info-badge" tabindex="0" data-tooltip="Saved to local browser storage after a successful save so you do not need to re-enter it next time.">i</span>
-            </span>
-            <input id="fromName" type="text" value="{{ .DefaultFromName }}" autocomplete="off" spellcheck="false">
-          </label>
-          <label class="field">
-            <span class="field-head">
-              <span>From Email</span>
-              <span class="info-badge" tabindex="0" data-tooltip="Saved to local browser storage after a successful save so you do not need to re-enter it next time.">i</span>
-            </span>
-            <input id="fromEmail" type="text" value="{{ .DefaultFromEmail }}" autocomplete="off" spellcheck="false">
-          </label>
-          <div class="field field-wide">
-            <span>To</span>
-            <span class="field-note">Drag recipients between To and Cc. Click empty space or Add recipient to add someone safely.</span>
-            <div id="toBoard" class="recipient-board" data-group="to">
-              <div id="toList" class="recipient-list"></div>
-              <div class="recipient-toolbar">
-                <button id="toAddButton" class="recipient-add secondary" type="button">Add recipient</button>
-              </div>
-            </div>
-            <input id="to" type="hidden">
-          </div>
-          <div class="field field-wide">
-            <span>Cc</span>
-            <div id="ccBoard" class="recipient-board" data-group="cc">
-              <div id="ccList" class="recipient-list"></div>
-              <div class="recipient-toolbar">
-                <button id="ccAddButton" class="recipient-add secondary" type="button">Add recipient</button>
-              </div>
-            </div>
-            <input id="cc" type="hidden">
-          </div>
+      <div id="directReplyView">
+        <div id="loadStage" class="toolbar">
           <label class="field field-wide">
-            <span>Subject</span>
-            <input id="subject" type="text" autocomplete="off" spellcheck="false">
+            <span>Lore URL</span>
+            <input id="url" type="text" value="{{ .AutoLoadURL }}" placeholder="https://lore.kernel.org/linux-mm/..." autocomplete="off" spellcheck="false">
           </label>
-          <label class="field field-wide">
-            <span>Draft Path</span>
-            <input id="draftPath" type="text" readonly>
-          </label>
+          <button id="loadButton" type="button">Load</button>
         </div>
 
-        <div class="status" id="status"></div>
+        <div id="composer" hidden>
+          <div class="composer-toolbar">
+            <button id="openLoreButton" type="button" class="secondary">Open Lore</button>
+            <button id="reloadButton" type="button" class="secondary">Reload</button>
+            <button id="loadAnotherButton" type="button" class="secondary">Load Another</button>
+          </div>
+          <div class="grid">
+            <label class="field">
+              <span class="field-head">
+                <span>From Name</span>
+                <span class="info-badge" tabindex="0" data-tooltip="Saved to local browser storage after a successful save so you do not need to re-enter it next time.">i</span>
+              </span>
+              <input id="fromName" type="text" value="{{ .DefaultFromName }}" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="field">
+              <span class="field-head">
+                <span>From Email</span>
+                <span class="info-badge" tabindex="0" data-tooltip="Saved to local browser storage after a successful save so you do not need to re-enter it next time.">i</span>
+              </span>
+              <input id="fromEmail" type="text" value="{{ .DefaultFromEmail }}" autocomplete="off" spellcheck="false">
+            </label>
+            <div class="field field-wide">
+              <span>To</span>
+              <span class="field-note">Drag recipients between To and Cc. Click empty space or Add recipient to add someone safely.</span>
+              <div id="toBoard" class="recipient-board" data-group="to">
+                <div id="toList" class="recipient-list"></div>
+                <div class="recipient-toolbar">
+                  <button id="toAddButton" class="recipient-add secondary" type="button">Add recipient</button>
+                </div>
+              </div>
+              <input id="to" type="hidden">
+            </div>
+            <div class="field field-wide">
+              <span>Cc</span>
+              <div id="ccBoard" class="recipient-board" data-group="cc">
+                <div id="ccList" class="recipient-list"></div>
+                <div class="recipient-toolbar">
+                  <button id="ccAddButton" class="recipient-add secondary" type="button">Add recipient</button>
+                </div>
+              </div>
+              <input id="cc" type="hidden">
+            </div>
+            <label class="field field-wide">
+              <span>Subject</span>
+              <input id="subject" type="text" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="field field-wide">
+              <span>Draft Path</span>
+              <input id="draftPath" type="text" readonly>
+            </label>
+          </div>
 
-        <div class="editor-shell">
-          <label class="field">
-            <span>Body</span>
-            <span class="field-note">Click the body area to edit in full screen.</span>
-            <div class="editor-surface">
-              <div class="ruler" aria-hidden="true"></div>
-              <textarea id="body" class="body-preview" wrap="off" spellcheck="false" readonly></textarea>
-              <div class="editor-actions">
-                <button id="saveButton" type="button">Send Mail</button>
+          <div class="status" id="status"></div>
+
+          <div class="editor-shell">
+            <label class="field">
+              <span>Body</span>
+              <span class="field-note">Click the body area to edit in full screen.</span>
+              <div class="editor-surface">
+                <div class="ruler" aria-hidden="true"></div>
+                <textarea id="body" class="body-preview" wrap="off" spellcheck="false" readonly></textarea>
+                <div class="editor-actions">
+                  <button id="saveButton" type="button">Send Mail</button>
+                </div>
               </div>
-            </div>
-          </label>
-          <div id="autosaveStatus" class="autosave-status" aria-live="polite"></div>
-          <div id="sendQueue" class="send-queue" hidden>
-            <div class="send-queue-head">
-              <div class="send-queue-copy">
-                <strong id="sendQueueTitle" class="send-queue-title">Scheduled Send</strong>
-                <div id="sendQueueMessage" class="send-queue-meta"></div>
+            </label>
+            <div id="autosaveStatus" class="autosave-status" aria-live="polite"></div>
+            <div id="sendQueue" class="send-queue" hidden>
+              <div class="send-queue-head">
+                <div class="send-queue-copy">
+                  <strong id="sendQueueTitle" class="send-queue-title">Scheduled Send</strong>
+                  <div id="sendQueueMessage" class="send-queue-meta"></div>
+                </div>
+                <div class="send-queue-actions">
+                  <button id="sendQueueNowButton" type="button">Send Now</button>
+                  <button id="sendQueueCopyButton" type="button" class="secondary">Copy Command</button>
+                  <button id="sendQueueCancelButton" type="button" class="secondary">Cancel</button>
+                  <button id="sendQueueDetailsButton" type="button" class="secondary" hidden>View Output</button>
+                  <button id="sendQueueDismissButton" type="button" class="secondary" hidden>Dismiss</button>
+                </div>
               </div>
-              <div class="send-queue-actions">
-                <button id="sendQueueNowButton" type="button">Send Now</button>
-                <button id="sendQueueCopyButton" type="button" class="secondary">Copy Command</button>
-                <button id="sendQueueCancelButton" type="button" class="secondary">Cancel</button>
-                <button id="sendQueueDetailsButton" type="button" class="secondary" hidden>View Output</button>
-                <button id="sendQueueDismissButton" type="button" class="secondary" hidden>Dismiss</button>
+              <div class="send-progress" aria-hidden="true">
+                <div id="sendQueueProgressBar" class="send-progress-bar"></div>
               </div>
-            </div>
-            <div class="send-progress" aria-hidden="true">
-              <div id="sendQueueProgressBar" class="send-progress-bar"></div>
             </div>
           </div>
+
+          <input id="messageId" type="hidden">
         </div>
 
-        <input id="messageId" type="hidden">
+        <pre id="errorOutput" class="error"></pre>
       </div>
 
-      <pre id="errorOutput" class="error"></pre>
+      <div id="inboxView" hidden>
+        <div class="inbox-toolbar">
+          <label class="field inbox-toolbar-list">
+            <span>Mailing List</span>
+            <input id="inboxListURL" type="text" value="{{ .DefaultInboxList }}" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="field inbox-toolbar-emails">
+            <span>My Emails</span>
+            <input id="inboxMyEmails" type="text" placeholder="alice@example.com, alias@example.com" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="field inbox-toolbar-range">
+            <span>Range</span>
+            <select id="inboxRangeDays">
+              <option value="7" selected>7 days</option>
+              <option value="30">30 days</option>
+              <option value="90">90 days</option>
+              <option value="180">180 days</option>
+            </select>
+          </label>
+          <label class="field inbox-toolbar-mode">
+            <span>Match Mode</span>
+            <select id="inboxMatchMode">
+              <option value="all_related">All Related</option>
+              <option value="from_me">From Me</option>
+              <option value="to_cc_me">To/Cc Me</option>
+            </select>
+          </label>
+          <button id="inboxSyncButton" type="button" class="inbox-toolbar-sync">Sync</button>
+        </div>
+
+        <div id="inboxStatus" class="status"></div>
+
+        <div id="inboxLayout" class="inbox-layout">
+          <div id="inboxSidebar" class="inbox-sidebar">
+            <div class="inbox-sidebar-head">
+              <button id="inboxSidebarToggle" type="button" class="secondary sidebar-toggle">Hide List</button>
+            </div>
+            <div id="inboxThreadsEmpty" class="empty-state">No cached inbox threads yet. Configure your emails and run Sync.</div>
+            <div id="inboxThreads" class="thread-list" hidden></div>
+          </div>
+          <div id="inboxDetailShell" class="inbox-detail-shell">
+            <div id="inboxDetailEmpty" class="empty-state">Select a thread to inspect messages and jump into the existing reply composer.</div>
+            <div id="inboxDetail" hidden>
+              <div class="thread-head">
+                <h2 id="inboxThreadSubject"></h2>
+                <div id="inboxThreadMeta" class="thread-meta"></div>
+              </div>
+              <article id="inboxMessageView" class="message-view">
+                <div class="message-head">
+                  <div class="message-copy">
+                    <h3 id="inboxMessageSubject"></h3>
+                    <div id="inboxMessageMeta" class="message-fields"></div>
+                    <div id="inboxMessageBadges" class="thread-badges"></div>
+                  </div>
+                  <div class="message-actions">
+                    <button id="inboxReplyButton" type="button" class="secondary">Reply In Composer</button>
+                  </div>
+                </div>
+                <pre id="inboxMessageBody" class="message-body"></pre>
+              </article>
+              <div class="thread-tree-shell">
+                <p class="thread-tree-title">Thread</p>
+                <div id="inboxMessages" class="message-tree"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -946,6 +1447,10 @@
     const heartbeatIntervalMs = 5000;
 
     const elements = {
+      directReplyView: document.getElementById("directReplyView"),
+      inboxView: document.getElementById("inboxView"),
+      directReplyTab: document.getElementById("directReplyTab"),
+      inboxTab: document.getElementById("inboxTab"),
       loadStage: document.getElementById("loadStage"),
       composer: document.getElementById("composer"),
       sendQueue: document.getElementById("sendQueue"),
@@ -1011,10 +1516,34 @@
       fullscreenSendQueueCopyButton: document.getElementById("fullscreenSendQueueCopyButton"),
       fullscreenSendQueueCancelButton: document.getElementById("fullscreenSendQueueCancelButton"),
       fullscreenSendQueueDetailsButton: document.getElementById("fullscreenSendQueueDetailsButton"),
-      fullscreenSendQueueDismissButton: document.getElementById("fullscreenSendQueueDismissButton")
+      fullscreenSendQueueDismissButton: document.getElementById("fullscreenSendQueueDismissButton"),
+      inboxListURL: document.getElementById("inboxListURL"),
+      inboxMyEmails: document.getElementById("inboxMyEmails"),
+      inboxRangeDays: document.getElementById("inboxRangeDays"),
+      inboxMatchMode: document.getElementById("inboxMatchMode"),
+      inboxSyncButton: document.getElementById("inboxSyncButton"),
+      inboxStatus: document.getElementById("inboxStatus"),
+      inboxLayout: document.getElementById("inboxLayout"),
+      inboxSidebar: document.getElementById("inboxSidebar"),
+      inboxSidebarToggle: document.getElementById("inboxSidebarToggle"),
+      inboxThreads: document.getElementById("inboxThreads"),
+      inboxThreadsEmpty: document.getElementById("inboxThreadsEmpty"),
+      inboxDetailShell: document.getElementById("inboxDetailShell"),
+      inboxDetail: document.getElementById("inboxDetail"),
+      inboxDetailEmpty: document.getElementById("inboxDetailEmpty"),
+      inboxThreadSubject: document.getElementById("inboxThreadSubject"),
+      inboxThreadMeta: document.getElementById("inboxThreadMeta"),
+      inboxMessages: document.getElementById("inboxMessages"),
+      inboxMessageView: document.getElementById("inboxMessageView"),
+      inboxMessageSubject: document.getElementById("inboxMessageSubject"),
+      inboxMessageMeta: document.getElementById("inboxMessageMeta"),
+      inboxMessageBadges: document.getElementById("inboxMessageBadges"),
+      inboxMessageBody: document.getElementById("inboxMessageBody"),
+      inboxReplyButton: document.getElementById("inboxReplyButton")
     };
 
     const state = {
+      activeView: "reply",
       dirty: false,
       hydrating: false,
       loading: false,
@@ -1033,6 +1562,12 @@
       sendOutput: "",
       dragging: null,
       recipientTargetGroup: "to",
+      inboxLoading: false,
+      inboxSidebarCollapsed: false,
+      inboxThreads: [],
+      inboxSelectedThreadID: "",
+      inboxThreadDetail: null,
+      inboxSelectedMessageID: "",
       recipients: {
         to: [],
         cc: []
@@ -1067,16 +1602,58 @@
     const storageKeys = {
       fromName: "lore-reply.from-name",
       fromEmail: "lore-reply.from-email",
-      bodyTheme: "lore-reply.body-theme"
+      bodyTheme: "lore-reply.body-theme",
+      inboxListURL: "lore-reply.inbox-list-url",
+      inboxMyEmails: "lore-reply.inbox-my-emails",
+      inboxMatchMode: "lore-reply.inbox-match-mode",
+      inboxSidebarCollapsed: "lore-reply.inbox-sidebar-collapsed"
     };
 
     function setStatus(message) {
       elements.status.textContent = message;
     }
 
+    function setInboxStatus(message) {
+      elements.inboxStatus.textContent = message;
+    }
+
     function setAutosaveStatus(message) {
       elements.autosaveStatus.textContent = message;
       elements.fullscreenAutosaveStatus.textContent = message;
+    }
+
+    function applyInboxSidebarState() {
+      if (!elements.inboxLayout || !elements.inboxSidebarToggle) {
+        return;
+      }
+      elements.inboxLayout.classList.toggle("sidebar-collapsed", state.inboxSidebarCollapsed);
+      elements.inboxSidebarToggle.textContent = state.inboxSidebarCollapsed ? "List" : "Hide List";
+      elements.inboxSidebarToggle.setAttribute("aria-expanded", state.inboxSidebarCollapsed ? "false" : "true");
+      elements.inboxSidebarToggle.title = state.inboxSidebarCollapsed ? "Show thread list" : "Hide thread list";
+    }
+
+    function storeInboxSidebarState() {
+      try {
+        window.localStorage.setItem(storageKeys.inboxSidebarCollapsed, state.inboxSidebarCollapsed ? "1" : "0");
+      } catch (_error) {
+      }
+    }
+
+    function setInboxSidebarCollapsed(collapsed) {
+      state.inboxSidebarCollapsed = Boolean(collapsed);
+      applyInboxSidebarState();
+      storeInboxSidebarState();
+    }
+
+    function switchView(view) {
+      state.activeView = view === "inbox" ? "inbox" : "reply";
+      const showingInbox = state.activeView === "inbox";
+      elements.directReplyView.hidden = showingInbox;
+      elements.inboxView.hidden = !showingInbox;
+      elements.directReplyTab.classList.toggle("active", !showingInbox);
+      elements.inboxTab.classList.toggle("active", showingInbox);
+      elements.directReplyTab.setAttribute("aria-selected", showingInbox ? "false" : "true");
+      elements.inboxTab.setAttribute("aria-selected", showingInbox ? "true" : "false");
     }
 
     function setLoadedState(loaded) {
@@ -1400,6 +1977,46 @@
       }
     }
 
+    function loadStoredInboxConfig() {
+      try {
+        const listURL = window.localStorage.getItem(storageKeys.inboxListURL);
+        const myEmails = window.localStorage.getItem(storageKeys.inboxMyEmails);
+        const matchMode = window.localStorage.getItem(storageKeys.inboxMatchMode);
+        const sidebarCollapsed = window.localStorage.getItem(storageKeys.inboxSidebarCollapsed);
+
+        if (listURL) {
+          elements.inboxListURL.value = listURL;
+        }
+        if (myEmails) {
+          elements.inboxMyEmails.value = myEmails;
+        }
+        if (matchMode) {
+          elements.inboxMatchMode.value = matchMode;
+        }
+        state.inboxSidebarCollapsed = sidebarCollapsed === "1";
+      } catch (_error) {
+      }
+      applyInboxSidebarState();
+    }
+
+    function storeInboxConfig() {
+      try {
+        window.localStorage.setItem(storageKeys.inboxListURL, elements.inboxListURL.value);
+        window.localStorage.setItem(storageKeys.inboxMyEmails, elements.inboxMyEmails.value);
+        window.localStorage.setItem(storageKeys.inboxMatchMode, elements.inboxMatchMode.value);
+      } catch (_error) {
+      }
+    }
+
+    function parseInboxEmails() {
+      return Array.from(new Set(
+        elements.inboxMyEmails.value
+          .split(",")
+          .map((value) => value.trim().toLowerCase())
+          .filter(Boolean)
+      ));
+    }
+
     function clearRecipientDialog() {
       elements.recipientName.value = "";
       elements.recipientEmail.value = "";
@@ -1678,6 +2295,620 @@
         throw error;
       }
       return data;
+    }
+
+    async function getJSON(url) {
+      const response = await fetch(url, {
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(data.error || "Request failed");
+        error.output = data.output || "";
+        throw error;
+      }
+      return data;
+    }
+
+    function inboxPayload() {
+      return {
+        list_url: elements.inboxListURL.value,
+        my_emails: parseInboxEmails(),
+        range_days: Number(elements.inboxRangeDays.value || "7"),
+        match_mode: elements.inboxMatchMode.value,
+        max_messages: 100
+      };
+    }
+
+    function renderInboxThreads(result) {
+      state.inboxThreads = Array.isArray(result.threads) ? result.threads : [];
+      elements.inboxThreads.textContent = "";
+
+      const threads = state.inboxThreads;
+      const hasThreads = threads.length > 0;
+      elements.inboxThreads.hidden = !hasThreads;
+      elements.inboxThreadsEmpty.hidden = hasThreads;
+
+      if (!hasThreads) {
+        elements.inboxThreadsEmpty.textContent = result.synced_at
+          ? "Sync completed, but no related threads matched the current filters."
+          : "No cached inbox threads yet. Configure your emails and run Sync.";
+        if (!state.inboxSelectedThreadID) {
+          elements.inboxDetail.hidden = true;
+          elements.inboxDetailEmpty.hidden = false;
+        }
+        return;
+      }
+
+      threads.forEach((thread) => {
+        const item = document.createElement("div");
+        item.className = "thread-item";
+        item.setAttribute("role", "button");
+        item.tabIndex = 0;
+        if (thread.id === state.inboxSelectedThreadID) {
+          item.classList.add("active");
+        }
+
+        const title = document.createElement("h3");
+        title.textContent = thread.subject || "(no subject)";
+
+        const meta = document.createElement("div");
+        meta.className = "thread-meta";
+
+        const sender = document.createElement("div");
+        sender.textContent = thread.latest_from || "Unknown sender";
+
+        const timing = document.createElement("div");
+        timing.textContent = `${thread.latest_date || "unknown date"} • ${thread.message_count || 0} messages`;
+
+        meta.append(sender, timing);
+
+        const badges = document.createElement("div");
+        badges.className = "thread-badges";
+
+        (thread.match_reasons || []).forEach((reason) => {
+          const badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = reason;
+          badges.appendChild(badge);
+        });
+
+        const stats = document.createElement("span");
+        stats.className = "badge";
+        stats.textContent = `${thread.hit_count || 0} matched messages`;
+        badges.appendChild(stats);
+
+        const openThread = () => {
+          void loadInboxThread(thread.id);
+        };
+
+        item.append(title, meta, badges);
+        item.addEventListener("click", openThread);
+        item.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") {
+            return;
+          }
+          event.preventDefault();
+          openThread();
+        });
+        elements.inboxThreads.appendChild(item);
+      });
+    }
+
+    function inboxSenderLabel(value) {
+      const raw = String(value || "").trim();
+      if (!raw) {
+        return "Unknown sender";
+      }
+      const angle = raw.indexOf("<");
+      if (angle > 0) {
+        return raw.slice(0, angle).trim().replace(/^"|"$/g, "") || raw;
+      }
+      return raw.replace(/^"|"$/g, "");
+    }
+
+    function inboxMessageMap(messages) {
+      const map = new Map();
+      messages.forEach((message) => {
+        if (message && message.message_id) {
+          map.set(message.message_id, message);
+        }
+      });
+      return map;
+    }
+
+    function inboxParentID(message, map) {
+      if (message.in_reply_to && map.has(message.in_reply_to)) {
+        return message.in_reply_to;
+      }
+      const refs = Array.isArray(message.references) ? message.references : [];
+      for (let index = refs.length - 1; index >= 0; index -= 1) {
+        const candidate = refs[index];
+        if (candidate !== message.message_id && map.has(candidate)) {
+          return candidate;
+        }
+      }
+      return "";
+    }
+
+    function inboxStripReplyPrefixes(subject) {
+      const prefixes = ["re:", "fwd:", "forwarded:", "aw:", "回复:", "回复："];
+      let cleaned = String(subject || "").trim();
+      let changed = true;
+
+      while (changed) {
+        changed = false;
+        const lower = cleaned.toLowerCase();
+        for (const prefix of prefixes) {
+          if (!lower.startsWith(prefix)) {
+            continue;
+          }
+          cleaned = cleaned.slice(prefix.length).trim();
+          changed = true;
+          break;
+        }
+      }
+
+      return cleaned;
+    }
+
+    function inboxIsReplySubject(subject) {
+      const raw = String(subject || "").trim();
+      if (!raw) {
+        return false;
+      }
+      return inboxStripReplyPrefixes(raw) !== raw;
+    }
+
+    function inboxCleanSubject(subject) {
+      const raw = String(subject || "");
+      const noBrackets = raw.replace(/\[.*?\]/g, " ");
+      return inboxStripReplyPrefixes(noBrackets).replace(/\s+/g, " ").trim();
+    }
+
+    function parseInboxSeriesInfo(message) {
+      const raw = String(message && message.subject || "");
+      const lower = raw.trim().toLowerCase();
+      let index = 1;
+      let total = 1;
+
+      let match = raw.match(/\[.*?(\d+)\/(\d+).*?\]/i);
+      if (!match) {
+        match = raw.match(/\b(?:PATCH|RFC|RESEND)\s+(\d+)\/(\d+)\b/i);
+      }
+      if (!match) {
+        match = inboxCleanSubject(raw).match(/^\s*(\d+)\/(\d+)\b/);
+      }
+      if (match) {
+        index = Number(match[1] || "1");
+        total = Number(match[2] || "1");
+      }
+
+      const isReply = inboxIsReplySubject(raw);
+      const hasPatchTag = lower.includes("patch") || lower.includes("rfc");
+      const body = String(message && message.body || "");
+      const hasDiff = body.includes("diff --git") || (body.includes("--- ") && body.includes("+++ ") && body.includes("@@"));
+      const isPatchLike = !isReply && hasPatchTag && (hasDiff || total > 1 || index === 0);
+      const isSeriesAnchor = isPatchLike && (total > 1 || index === 0);
+
+      return {
+        cleanSubject: inboxCleanSubject(raw),
+        index,
+        total,
+        isReply,
+        isPatchLike,
+        isSeriesAnchor,
+        isCoverLetter: isSeriesAnchor && index === 0
+      };
+    }
+
+    function sortInboxMessagesByDate(left, right) {
+      const leftTime = Date.parse(left.date || "") || 0;
+      const rightTime = Date.parse(right.date || "") || 0;
+      if (leftTime === rightTime) {
+        return String(left.message_id).localeCompare(String(right.message_id));
+      }
+      return leftTime - rightTime;
+    }
+
+    function buildInboxReplyRows(messages) {
+      const map = inboxMessageMap(messages);
+      const nodes = new Map();
+
+      messages.forEach((message) => {
+        if (!message || !message.message_id) {
+          return;
+        }
+        nodes.set(message.message_id, {
+          message,
+          children: [],
+          parentID: ""
+        });
+      });
+
+      messages.forEach((message) => {
+        if (!message || !message.message_id) {
+          return;
+        }
+        const node = nodes.get(message.message_id);
+        node.parentID = inboxParentID(message, map);
+        if (node.parentID && nodes.has(node.parentID)) {
+          nodes.get(node.parentID).children.push(node);
+        }
+      });
+
+      const roots = Array.from(nodes.values()).filter((node) => !node.parentID || !nodes.has(node.parentID));
+      const rows = [];
+
+      const flatten = (list, depth) => {
+        list.sort((left, right) => sortInboxMessagesByDate(left.message, right.message)).forEach((node) => {
+          rows.push({ depth, node, axis: depth === 0 });
+          flatten(node.children, depth + 1);
+        });
+      };
+
+      flatten(roots, 0);
+      return rows;
+    }
+
+    function buildInboxMessageTree(messages) {
+      const ordered = Array.isArray(messages) ? messages.filter((message) => message && message.message_id) : [];
+      if (ordered.length === 0) {
+        return [];
+      }
+
+      const seriesInfo = new Map();
+      ordered.forEach((message) => {
+        seriesInfo.set(message.message_id, parseInboxSeriesInfo(message));
+      });
+
+      const axisMessages = ordered.filter((message) => {
+        const info = seriesInfo.get(message.message_id);
+        return info && (info.isSeriesAnchor || info.isPatchLike);
+      });
+
+      if (axisMessages.length === 0) {
+        return buildInboxReplyRows(ordered);
+      }
+
+      axisMessages.sort((left, right) => {
+        const leftInfo = seriesInfo.get(left.message_id);
+        const rightInfo = seriesInfo.get(right.message_id);
+        const leftRank = leftInfo && leftInfo.isCoverLetter ? 0 : (leftInfo ? leftInfo.index : 1);
+        const rightRank = rightInfo && rightInfo.isCoverLetter ? 0 : (rightInfo ? rightInfo.index : 1);
+
+        if (leftRank !== rightRank) {
+          return leftRank - rightRank;
+        }
+
+        const leftTotal = leftInfo ? leftInfo.total : 1;
+        const rightTotal = rightInfo ? rightInfo.total : 1;
+        if (leftTotal !== rightTotal) {
+          return rightTotal - leftTotal;
+        }
+
+        const cleanCompare = String(leftInfo ? leftInfo.cleanSubject : "").localeCompare(String(rightInfo ? rightInfo.cleanSubject : ""));
+        if (cleanCompare !== 0) {
+          return cleanCompare;
+        }
+
+        return sortInboxMessagesByDate(left, right);
+      });
+
+      const axisIDs = new Set(axisMessages.map((message) => message.message_id));
+      const map = inboxMessageMap(ordered);
+      const childMap = new Map();
+
+      ordered.forEach((message) => {
+        if (!message || !message.message_id || axisIDs.has(message.message_id)) {
+          return;
+        }
+        const parentID = inboxParentID(message, map);
+        if (!childMap.has(parentID)) {
+          childMap.set(parentID, []);
+        }
+        childMap.get(parentID).push(message);
+      });
+
+      childMap.forEach((children) => {
+        children.sort(sortInboxMessagesByDate);
+      });
+
+      const rows = [];
+      const visited = new Set();
+
+      const appendReplies = (parentID, depth) => {
+        const children = childMap.get(parentID) || [];
+        children.forEach((child) => {
+          if (visited.has(child.message_id)) {
+            return;
+          }
+          visited.add(child.message_id);
+          rows.push({
+            depth,
+            node: { message: child },
+            axis: false
+          });
+          appendReplies(child.message_id, depth + 1);
+        });
+      };
+
+      axisMessages.forEach((message) => {
+        if (visited.has(message.message_id)) {
+          return;
+        }
+        visited.add(message.message_id);
+        rows.push({
+          depth: 0,
+          node: { message },
+          axis: true
+        });
+        appendReplies(message.message_id, 1);
+      });
+
+      ordered.forEach((message) => {
+        if (!message || !message.message_id || visited.has(message.message_id)) {
+          return;
+        }
+        visited.add(message.message_id);
+        rows.push({
+          depth: 0,
+          node: { message },
+          axis: true
+        });
+        appendReplies(message.message_id, 1);
+      });
+
+      return rows;
+    }
+
+    function findInboxMessage(detail, messageID) {
+      const messages = Array.isArray(detail.messages) ? detail.messages : [];
+      return messages.find((message) => message.message_id === messageID) || null;
+    }
+
+    function defaultInboxMessage(detail) {
+      const rows = buildInboxMessageTree(Array.isArray(detail.messages) ? detail.messages : []);
+      if (rows.length === 0) {
+        return null;
+      }
+      return rows[0].node.message;
+    }
+
+    function renderInboxMessageTree(detail) {
+      elements.inboxMessages.textContent = "";
+      const messages = Array.isArray(detail.messages) ? detail.messages : [];
+      const rows = buildInboxMessageTree(messages);
+
+      rows.forEach(({ depth, node, axis }) => {
+        const message = node.message;
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "message-node";
+        if (axis) {
+          item.classList.add("axis");
+        }
+        if (message.message_id === state.inboxSelectedMessageID) {
+          item.classList.add("active");
+        }
+
+        const body = document.createElement("div");
+        body.className = "message-node-body";
+        body.style.marginLeft = `${depth * 24}px`;
+
+        const meta = document.createElement("div");
+        meta.className = "message-node-meta";
+        meta.textContent = `${inboxSenderLabel(message.from)} • ${message.date || "unknown date"}`;
+
+        if (axis) {
+          const subject = document.createElement("div");
+          subject.className = "message-node-subject";
+          subject.textContent = message.subject || "(no subject)";
+          body.append(subject);
+        }
+
+        body.append(meta);
+        item.appendChild(body);
+        item.addEventListener("click", () => {
+          selectInboxMessage(message.message_id);
+        });
+        elements.inboxMessages.appendChild(item);
+      });
+    }
+
+    function renderInboxMessageView(message) {
+      if (!message) {
+        elements.inboxMessageSubject.textContent = "";
+        elements.inboxMessageMeta.textContent = "";
+        elements.inboxMessageBadges.textContent = "";
+        elements.inboxMessageBody.textContent = "";
+        elements.inboxReplyButton.disabled = true;
+        elements.inboxMessageView.classList.remove("hit");
+        return;
+      }
+
+      elements.inboxMessageSubject.textContent = message.subject || "(no subject)";
+      elements.inboxMessageMeta.textContent = "";
+
+      const fields = [
+        { label: "From", type: "text", value: message.from || "Unknown sender" },
+        { label: "Date", type: "text", value: message.date || "unknown date" },
+        { label: "To", type: "list", values: splitRecipientText(message.to || "") },
+        { label: "Cc", type: "list", values: splitRecipientText(message.cc || "") }
+      ].filter((field) => field.type === "list" ? field.values.length > 0 : field.value);
+
+      fields.forEach((field) => {
+        const row = document.createElement("div");
+        row.className = "message-field";
+
+        const label = document.createElement("div");
+        label.className = "message-field-label";
+        label.textContent = field.label;
+
+        const value = document.createElement("div");
+        value.className = "message-field-value";
+        if (field.type === "list") {
+          value.classList.add("message-field-value-list");
+          field.values.slice(0, 3).forEach((entry) => {
+            const line = document.createElement("div");
+            line.textContent = entry;
+            value.appendChild(line);
+          });
+          if (field.values.length > 3) {
+            const more = document.createElement("div");
+            more.className = "message-field-value-more";
+            more.textContent = "...";
+            value.appendChild(more);
+          }
+        } else {
+          value.textContent = field.value;
+        }
+
+        row.append(label, value);
+        elements.inboxMessageMeta.appendChild(row);
+      });
+
+      elements.inboxMessageBadges.textContent = "";
+      (message.match_reasons || []).forEach((reason) => {
+        const badge = document.createElement("span");
+        badge.className = "badge";
+        badge.textContent = reason;
+        elements.inboxMessageBadges.appendChild(badge);
+      });
+
+      elements.inboxMessageBody.textContent = message.body || "(empty body)";
+      elements.inboxReplyButton.disabled = !message.url;
+      elements.inboxMessageView.classList.toggle("hit", Boolean(message.is_hit));
+      elements.inboxReplyButton.onclick = () => {
+        if (message.url) {
+          void replyFromInbox(message.url);
+        }
+      };
+    }
+
+    function scrollInboxDetailToTop() {
+      if (elements.inboxDetailShell) {
+        elements.inboxDetailShell.scrollTop = 0;
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }
+
+    function selectInboxMessage(messageID) {
+      if (!state.inboxThreadDetail) {
+        return;
+      }
+      const message = findInboxMessage(state.inboxThreadDetail, messageID);
+      if (!message) {
+        return;
+      }
+      state.inboxSelectedMessageID = message.message_id;
+      renderInboxMessageTree(state.inboxThreadDetail);
+      renderInboxMessageView(message);
+      scrollInboxDetailToTop();
+    }
+
+    function renderInboxDetail(detail) {
+      const messages = Array.isArray(detail.messages) ? detail.messages : [];
+      state.inboxThreadDetail = detail;
+
+      elements.inboxThreadSubject.textContent = detail.thread.subject || "(no subject)";
+      elements.inboxThreadMeta.textContent = `${detail.thread.latest_from || "Unknown sender"} • ${detail.thread.latest_date || "unknown date"} • ${detail.thread.message_count || 0} messages`;
+      elements.inboxDetail.hidden = false;
+      elements.inboxDetailEmpty.hidden = true;
+
+      if (messages.length === 0) {
+        state.inboxSelectedMessageID = "";
+        renderInboxMessageTree(detail);
+        renderInboxMessageView(null);
+        return;
+      }
+
+      const current = findInboxMessage(detail, state.inboxSelectedMessageID);
+      const selected = current || defaultInboxMessage(detail);
+      state.inboxSelectedMessageID = selected ? selected.message_id : "";
+      renderInboxMessageTree(detail);
+      renderInboxMessageView(selected);
+    }
+
+    async function loadInboxThread(threadID) {
+      if (!threadID) {
+        return;
+      }
+
+      state.inboxSelectedThreadID = threadID;
+      renderInboxThreads({ threads: state.inboxThreads });
+      setInboxStatus("Loading thread...");
+
+      try {
+        const detail = await getJSON(`/api/inbox/thread?id=${encodeURIComponent(threadID)}`);
+        renderInboxDetail(detail);
+        setInboxStatus("");
+      } catch (error) {
+        setInboxStatus(String(error.message || error));
+      }
+    }
+
+    async function refreshInboxThreads() {
+      try {
+        const result = await getJSON("/api/inbox/threads");
+        if (result.list_url) {
+          elements.inboxListURL.value = result.list_url;
+        }
+        if ((!elements.inboxMyEmails.value.trim()) && Array.isArray(result.my_emails) && result.my_emails.length > 0) {
+          elements.inboxMyEmails.value = result.my_emails.join(", ");
+        }
+        if (result.match_mode) {
+          elements.inboxMatchMode.value = result.match_mode;
+        }
+        renderInboxThreads(result);
+      } catch (_error) {
+      }
+    }
+
+    async function syncInbox() {
+      if (state.inboxLoading) {
+        return;
+      }
+
+      const payload = inboxPayload();
+      if (!payload.my_emails.length) {
+        setInboxStatus("Enter at least one email address.");
+        return;
+      }
+
+      state.inboxLoading = true;
+      elements.inboxSyncButton.disabled = true;
+      storeInboxConfig();
+      setInboxStatus("Syncing related lore threads...");
+
+      try {
+        const result = await postJSON("/api/inbox/sync", payload);
+        renderInboxThreads(result);
+        if (result.threads && result.threads.length > 0) {
+          await loadInboxThread(result.threads[0].id);
+        } else {
+          elements.inboxDetail.hidden = true;
+          elements.inboxDetailEmpty.hidden = false;
+        }
+        setInboxStatus(`Synced ${result.threads ? result.threads.length : 0} threads.`);
+      } catch (error) {
+        setInboxStatus(String(error.message || error));
+      } finally {
+        state.inboxLoading = false;
+        elements.inboxSyncButton.disabled = false;
+      }
+    }
+
+    async function replyFromInbox(messageURL) {
+      if (!messageURL) {
+        return;
+      }
+      elements.url.value = messageURL;
+      switchView("reply");
+      await loadDraft(false);
     }
 
     async function sendHeartbeat() {
@@ -2041,6 +3272,18 @@
     bindRecipientBoard(elements.ccBoard, "cc");
     elements.toAddButton.addEventListener("click", () => openRecipientDialog("to"));
     elements.ccAddButton.addEventListener("click", () => openRecipientDialog("cc"));
+    elements.directReplyTab.addEventListener("click", () => switchView("reply"));
+    elements.inboxTab.addEventListener("click", () => switchView("inbox"));
+    elements.inboxSidebarToggle.addEventListener("click", () => {
+      setInboxSidebarCollapsed(!state.inboxSidebarCollapsed);
+    });
+    elements.inboxSyncButton.addEventListener("click", () => {
+      void syncInbox();
+    });
+    [elements.inboxListURL, elements.inboxMyEmails, elements.inboxRangeDays, elements.inboxMatchMode].forEach((field) => {
+      field.addEventListener("change", storeInboxConfig);
+      field.addEventListener("input", storeInboxConfig);
+    });
     elements.recipientCancelButton.addEventListener("click", closeRecipientDialog);
     elements.recipientConfirmButton.addEventListener("click", () => {
       const name = elements.recipientName.value;
@@ -2074,9 +3317,12 @@
     });
 
     loadStoredIdentity();
+    loadStoredInboxConfig();
     loadStoredBodyTheme();
     elements.url.addEventListener("input", updateOpenLoreButton);
+    switchView("reply");
     setLoadedState(false);
+    void refreshInboxThreads();
     updateSendQueue();
     updateAutosaveStatus();
 

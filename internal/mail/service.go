@@ -223,13 +223,23 @@ func (s Service) SendDraft(ctx context.Context, draft Draft) (SendResult, error)
 }
 
 func (s Service) fetchMessage(ctx context.Context, url string) ([]byte, string, error) {
+	return s.fetchMbox(ctx, url, true)
+}
+
+func (s Service) fetchMbox(ctx context.Context, url string, singleMessage bool) ([]byte, string, error) {
 	tempDir, err := os.MkdirTemp("", "lore-reply-")
 	if err != nil {
 		return nil, "", fmt.Errorf("create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	cmd := exec.CommandContext(ctx, s.B4Path, "mbox", "--single-message", "-o", tempDir, url)
+	args := []string{"mbox"}
+	if singleMessage {
+		args = append(args, "--single-message")
+	}
+	args = append(args, "-o", tempDir, url)
+
+	cmd := exec.CommandContext(ctx, s.B4Path, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, string(output), err
