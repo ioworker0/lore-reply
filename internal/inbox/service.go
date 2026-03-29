@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -106,6 +107,7 @@ type MessageSummary struct {
 type DiscoveryQuery struct {
 	ListURL string
 	Query   string
+	Limit   int
 }
 
 type SearchHit struct {
@@ -118,15 +120,22 @@ type HTTPDiscoverer struct {
 }
 
 type persistedState struct {
-	Config   SyncOptions    `json:"config"`
-	SyncedAt string         `json:"synced_at"`
-	Threads  []ThreadDetail `json:"threads"`
+	Config    SyncOptions      `json:"config"`
+	SyncedAt  string           `json:"synced_at"`
+	Threads   []ThreadDetail   `json:"threads"`
+	Preflight []queryWatermark `json:"preflight,omitempty"`
 }
 
 type searchPlan struct {
 	ListURL string
+	Key     string
 	Query   string
 	Reason  string
+}
+
+type queryWatermark struct {
+	Key       string `json:"key"`
+	LatestHit string `json:"latest_hit,omitempty"`
 }
 
 func (s *Service) Sync(ctx context.Context, opts SyncOptions) (SyncResult, error) {
@@ -149,7 +158,21 @@ func (s *Service) Sync(ctx context.Context, opts SyncOptions) (SyncResult, error
 		return SyncResult{}, errors.New("no discovery queries were generated")
 	}
 
-	hits, err := s.discoverHits(ctx, queries, opts.MaxMessages)
+	cachedState, canUsePreflight, err := s.loadCachedState(opts)
+	if err != nil {
+		return SyncResult{}, err
+	}
+	if canUsePreflight {
+		_, changed, err := s.preflightQueries(ctx, queries, cachedState.Preflight)
+		if err != nil {
+			return SyncResult{}, err
+		}
+		if !changed {
+			return syncResultFromState(cachedState), nil
+		}
+	}
+
+	hits, latestHits, err := s.discoverHits(ctx, queries, opts.MaxMessages)
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -174,9 +197,10 @@ func (s *Service) Sync(ctx context.Context, opts SyncOptions) (SyncResult, error
 	}
 
 	state := persistedState{
-		Config:   opts,
-		SyncedAt: result.SyncedAt,
-		Threads:  threads,
+		Config:    opts,
+		SyncedAt:  result.SyncedAt,
+		Threads:   threads,
+		Preflight: latestHits,
 	}
 	if err := s.writeState(state); err != nil {
 		return SyncResult{}, err
@@ -232,17 +256,24 @@ func (s *Service) GetThread(threadID string) (ThreadDetail, error) {
 	return ThreadDetail{}, os.ErrNotExist
 }
 
-func (s *Service) discoverHits(ctx context.Context, queries []searchPlan, maxMessages int) ([]SearchHit, error) {
+func (s *Service) discoverHits(ctx context.Context, queries []searchPlan, maxMessages int) ([]SearchHit, []queryWatermark, error) {
 	merged := make([]SearchHit, 0, maxMessages)
+	watermarks := make([]queryWatermark, 0, len(queries))
 	index := make(map[string]int)
+	reachedLimit := false
 	for _, query := range queries {
 		results, err := s.Discoverer.Discover(ctx, DiscoveryQuery{
 			ListURL: query.ListURL,
 			Query:   query.Query,
+			Limit:   maxMessages,
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
+		watermarks = append(watermarks, queryWatermark{
+			Key:       query.Key,
+			LatestHit: latestQueryHit(results),
+		})
 		for _, result := range results {
 			key := canonicalMessageKey(result.URL)
 			if key == "" {
@@ -252,17 +283,20 @@ func (s *Service) discoverHits(ctx context.Context, queries []searchPlan, maxMes
 				merged[idx].Reasons = appendReason(merged[idx].Reasons, query.Reason)
 				continue
 			}
+			if reachedLimit {
+				continue
+			}
 			index[key] = len(merged)
 			merged = append(merged, SearchHit{
 				URL:     result.URL,
 				Reasons: appendReason(nil, query.Reason),
 			})
 			if len(merged) >= maxMessages {
-				return merged, nil
+				reachedLimit = true
 			}
 		}
 	}
-	return merged, nil
+	return merged, watermarks, nil
 }
 
 func (s *Service) loadThreads(ctx context.Context, opts SyncOptions, hits []SearchHit) ([]ThreadDetail, error) {
@@ -297,6 +331,72 @@ func (s *Service) loadThreads(ctx context.Context, opts SyncOptions, hits []Sear
 		return latestDateUnix(threads[i]) > latestDateUnix(threads[j])
 	})
 	return threads, nil
+}
+
+func (s *Service) loadCachedState(opts SyncOptions) (persistedState, bool, error) {
+	state, err := s.readState()
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return persistedState{}, false, nil
+		}
+		return persistedState{}, false, err
+	}
+
+	if !sameSyncOptions(state.Config, opts) {
+		return persistedState{}, false, nil
+	}
+	return state, true, nil
+}
+
+func (s *Service) preflightQueries(ctx context.Context, queries []searchPlan, previous []queryWatermark) ([]queryWatermark, bool, error) {
+	current := make([]queryWatermark, 0, len(queries))
+	previousMap := make(map[string]string, len(previous))
+	for _, watermark := range previous {
+		previousMap[watermark.Key] = watermark.LatestHit
+	}
+
+	changed := len(previous) != len(queries)
+	for _, query := range queries {
+		results, err := s.Discoverer.Discover(ctx, DiscoveryQuery{
+			ListURL: query.ListURL,
+			Query:   query.Query,
+			Limit:   1,
+		})
+		if err != nil {
+			return nil, false, err
+		}
+
+		currentWatermark := queryWatermark{
+			Key:       query.Key,
+			LatestHit: latestQueryHit(results),
+		}
+		current = append(current, currentWatermark)
+		if previousMap[query.Key] != currentWatermark.LatestHit {
+			changed = true
+		}
+		delete(previousMap, query.Key)
+	}
+
+	if len(previousMap) > 0 {
+		changed = true
+	}
+	return current, changed, nil
+}
+
+func syncResultFromState(state persistedState) SyncResult {
+	result := SyncResult{
+		Threads:     make([]ThreadSummary, 0, len(state.Threads)),
+		SyncedAt:    state.SyncedAt,
+		ListURL:     state.Config.ListURL,
+		MyEmails:    append([]string(nil), state.Config.MyEmails...),
+		RangeDays:   state.Config.RangeDays,
+		MatchMode:   state.Config.MatchMode,
+		MaxMessages: state.Config.MaxMessages,
+	}
+	for _, thread := range state.Threads {
+		result.Threads = append(result.Threads, thread.Thread)
+	}
+	return result
 }
 
 func (s *Service) writeState(state persistedState) error {
@@ -339,7 +439,7 @@ func (d HTTPDiscoverer) Discover(ctx context.Context, query DiscoveryQuery) ([]S
 		client = http.DefaultClient
 	}
 
-	feedURL, err := buildFeedURL(query.ListURL, query.Query)
+	feedURL, err := buildFeedURL(query.ListURL, query.Query, query.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -386,11 +486,14 @@ func (d HTTPDiscoverer) Discover(ctx context.Context, query DiscoveryQuery) ([]S
 			}
 		}
 		hits = append(hits, SearchHit{URL: href})
+		if query.Limit > 0 && len(hits) >= query.Limit {
+			break
+		}
 	}
 	return hits, nil
 }
 
-func buildFeedURL(listURL, query string) (string, error) {
+func buildFeedURL(listURL, query string, limit int) (string, error) {
 	parsed, err := url.Parse(strings.TrimSpace(listURL))
 	if err != nil {
 		return "", fmt.Errorf("parse list url: %w", err)
@@ -402,6 +505,9 @@ func buildFeedURL(listURL, query string) (string, error) {
 	values := parsed.Query()
 	values.Set("q", query)
 	values.Set("x", "A")
+	if limit > 0 {
+		values.Set("l", strconv.Itoa(limit))
+	}
 	parsed.RawQuery = values.Encode()
 	if parsed.Path == "" {
 		parsed.Path = "/"
@@ -413,9 +519,11 @@ func buildQueries(opts SyncOptions) []searchPlan {
 	dateStart := time.Now().UTC().AddDate(0, 0, -opts.RangeDays).Format("2006-01-02")
 	queries := make([]searchPlan, 0, len(opts.MyEmails)*3)
 	appendQuery := func(email, field, reason string) {
+		key := field + ":" + email
 		queries = append(queries, searchPlan{
 			ListURL: opts.ListURL,
-			Query:   fmt.Sprintf("%s:%s d:%s..", field, email, dateStart),
+			Key:     key,
+			Query:   fmt.Sprintf("%s d:%s..", key, dateStart),
 			Reason:  reason,
 		})
 	}
@@ -471,6 +579,27 @@ func normalizeEmails(values []string) []string {
 		emails = append(emails, value)
 	}
 	return emails
+}
+
+func sameSyncOptions(left, right SyncOptions) bool {
+	left = normalizeOptions(left)
+	right = normalizeOptions(right)
+	if left.ListURL != right.ListURL ||
+		left.RangeDays != right.RangeDays ||
+		left.MatchMode != right.MatchMode ||
+		left.MaxMessages != right.MaxMessages {
+		return false
+	}
+
+	if len(left.MyEmails) != len(right.MyEmails) {
+		return false
+	}
+
+	leftEmails := append([]string(nil), left.MyEmails...)
+	rightEmails := append([]string(nil), right.MyEmails...)
+	sort.Strings(leftEmails)
+	sort.Strings(rightEmails)
+	return slices.Equal(leftEmails, rightEmails)
 }
 
 func buildThreadDetail(messages []loremail.ThreadMessage, hits []SearchHit, myEmails []string) ThreadDetail {
@@ -600,6 +729,13 @@ func canonicalMessageKey(value string) string {
 		segment = decoded
 	}
 	return strings.ToLower(strings.Trim(segment, "<>"))
+}
+
+func latestQueryHit(hits []SearchHit) string {
+	if len(hits) == 0 {
+		return ""
+	}
+	return canonicalMessageKey(hits[0].URL)
 }
 
 func pathTail(path string) string {
