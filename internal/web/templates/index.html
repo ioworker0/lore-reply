@@ -950,6 +950,18 @@
       gap: 1px;
     }
 
+    .thread-meta-label {
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 10px;
+    }
+
+    .thread-meta-value {
+      color: var(--text);
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
     .thread-badges {
       display: flex;
       flex-wrap: wrap;
@@ -1065,11 +1077,6 @@
 
     .message-node.axis .message-node-meta {
       margin-top: 1px;
-    }
-
-    .message-view.hit {
-      border-color: rgba(155, 44, 44, 0.34);
-      background: rgba(155, 44, 44, 0.05);
     }
 
     .message-head {
@@ -2358,13 +2365,18 @@
         const meta = document.createElement("div");
         meta.className = "thread-meta";
 
-        const sender = document.createElement("div");
-        sender.textContent = thread.latest_from || "Unknown sender";
+        const senderLabel = document.createElement("div");
+        senderLabel.className = "thread-meta-label";
+        senderLabel.textContent = "Latest reply from";
+
+        const senderValue = document.createElement("div");
+        senderValue.className = "thread-meta-value";
+        senderValue.textContent = thread.latest_from || "Unknown sender";
 
         const timing = document.createElement("div");
         timing.textContent = `${thread.latest_date || "unknown date"} • ${thread.message_count || 0} messages`;
 
-        meta.append(sender, timing);
+        meta.append(senderLabel, senderValue, timing);
 
         const badges = document.createElement("div");
         badges.className = "thread-badges";
@@ -2375,11 +2387,6 @@
           badge.textContent = reason;
           badges.appendChild(badge);
         });
-
-        const stats = document.createElement("span");
-        stats.className = "badge";
-        stats.textContent = `${thread.hit_count || 0} matched messages`;
-        badges.appendChild(stats);
 
         const openThread = () => {
           void loadInboxThread(thread.id);
@@ -2678,6 +2685,28 @@
       return rows[0].node.message;
     }
 
+    function inboxThreadAuthor(detail) {
+      if (detail && detail.thread && detail.thread.author) {
+        return detail.thread.author;
+      }
+
+      const messages = Array.isArray(detail && detail.messages) ? detail.messages : [];
+      if (messages.length === 0) {
+        return "Unknown sender";
+      }
+
+      const map = inboxMessageMap(messages);
+      for (const message of messages) {
+        if (!message) {
+          continue;
+        }
+        if (!inboxParentID(message, map)) {
+          return message.from || "Unknown sender";
+        }
+      }
+      return messages[0].from || "Unknown sender";
+    }
+
     function renderInboxMessageTree(detail) {
       elements.inboxMessages.textContent = "";
       const messages = Array.isArray(detail.messages) ? detail.messages : [];
@@ -2726,7 +2755,6 @@
         elements.inboxMessageBadges.textContent = "";
         elements.inboxMessageBody.textContent = "";
         elements.inboxReplyButton.disabled = true;
-        elements.inboxMessageView.classList.remove("hit");
         return;
       }
 
@@ -2781,7 +2809,6 @@
 
       elements.inboxMessageBody.textContent = message.body || "(empty body)";
       elements.inboxReplyButton.disabled = !message.url;
-      elements.inboxMessageView.classList.toggle("hit", Boolean(message.is_hit));
       elements.inboxReplyButton.onclick = () => {
         if (message.url) {
           void replyFromInbox(message.url);
@@ -2815,7 +2842,18 @@
       state.inboxThreadDetail = detail;
 
       elements.inboxThreadSubject.textContent = detail.thread.subject || "(no subject)";
-      elements.inboxThreadMeta.textContent = `${detail.thread.latest_from || "Unknown sender"} • ${detail.thread.latest_date || "unknown date"} • ${detail.thread.message_count || 0} messages`;
+      elements.inboxThreadMeta.textContent = "";
+
+      const author = document.createElement("div");
+      author.textContent = `Author: ${inboxThreadAuthor(detail)}`;
+
+      const latestReply = document.createElement("div");
+      latestReply.textContent = `Latest reply from: ${detail.thread.latest_from || "Unknown sender"}`;
+
+      const timing = document.createElement("div");
+      timing.textContent = `${detail.thread.latest_date || "unknown date"} • ${detail.thread.message_count || 0} messages`;
+
+      elements.inboxThreadMeta.append(author, latestReply, timing);
       elements.inboxDetail.hidden = false;
       elements.inboxDetailEmpty.hidden = true;
 

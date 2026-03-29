@@ -73,11 +73,11 @@ type SyncResult struct {
 type ThreadSummary struct {
 	ID           string   `json:"id"`
 	Subject      string   `json:"subject"`
+	Author       string   `json:"author"`
 	LatestFrom   string   `json:"latest_from"`
 	LatestDate   string   `json:"latest_date"`
 	LatestURL    string   `json:"latest_url"`
 	MessageCount int      `json:"message_count"`
-	HitCount     int      `json:"hit_count"`
 	MatchReasons []string `json:"match_reasons"`
 	HasFromMe    bool     `json:"has_from_me"`
 	HasMention   bool     `json:"has_mention"`
@@ -430,6 +430,7 @@ func (s *Service) readState() (persistedState, error) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return persistedState{}, fmt.Errorf("parse inbox state: %w", err)
 	}
+	normalizePersistedState(&state)
 	return state, nil
 }
 
@@ -640,19 +641,16 @@ func buildThreadDetail(messages []loremail.ThreadMessage, hits []SearchHit, myEm
 		Thread: ThreadSummary{
 			ID:      root.MessageID,
 			Subject: firstNonEmpty(root.Subject, sorted[0].Subject),
+			Author:  firstNonEmpty(root.From, sorted[0].From),
 		},
 		Messages: make([]MessageSummary, 0, len(sorted)),
 	}
 
 	reasons := make([]string, 0, 2)
-	hitCount := 0
 	for _, message := range sorted {
 		messageReasons := hitMap[canonicalMessageKey(message.MessageID)]
 		if len(messageReasons) == 0 {
 			messageReasons = hitMap[canonicalMessageKey(message.URL)]
-		}
-		if len(messageReasons) > 0 {
-			hitCount++
 		}
 		detail.Messages = append(detail.Messages, MessageSummary{
 			MessageID:    message.MessageID,
@@ -682,7 +680,6 @@ func buildThreadDetail(messages []loremail.ThreadMessage, hits []SearchHit, myEm
 	detail.Thread.LatestDate = latest.Date
 	detail.Thread.LatestURL = latest.URL
 	detail.Thread.MessageCount = len(detail.Messages)
-	detail.Thread.HitCount = hitCount
 	detail.Thread.MatchReasons = reasons
 	detail.Thread.NeedsReply = (detail.Thread.HasFromMe || detail.Thread.HasMention) && !isFromMe(latest.From, myEmails)
 	if detail.Thread.Subject == "" {
@@ -704,6 +701,63 @@ func latestDateUnix(detail ThreadDetail) int64 {
 		return 0
 	}
 	return parsed.Unix()
+}
+
+func normalizePersistedState(state *persistedState) {
+	if state == nil {
+		return
+	}
+	for index := range state.Threads {
+		backfillThreadSummary(&state.Threads[index])
+	}
+}
+
+func backfillThreadSummary(detail *ThreadDetail) {
+	if detail == nil || len(detail.Messages) == 0 {
+		return
+	}
+
+	root := inferThreadRoot(detail.Messages)
+	if strings.TrimSpace(detail.Thread.ID) == "" {
+		detail.Thread.ID = root.MessageID
+	}
+	if strings.TrimSpace(detail.Thread.Subject) == "" {
+		detail.Thread.Subject = firstNonEmpty(root.Subject, detail.Messages[0].Subject)
+	}
+	if strings.TrimSpace(detail.Thread.Author) == "" {
+		detail.Thread.Author = firstNonEmpty(root.From, detail.Messages[0].From)
+	}
+
+	latest := detail.Messages[len(detail.Messages)-1]
+	if strings.TrimSpace(detail.Thread.LatestFrom) == "" {
+		detail.Thread.LatestFrom = latest.From
+	}
+	if strings.TrimSpace(detail.Thread.LatestDate) == "" {
+		detail.Thread.LatestDate = latest.Date
+	}
+	if strings.TrimSpace(detail.Thread.LatestURL) == "" {
+		detail.Thread.LatestURL = latest.URL
+	}
+	if detail.Thread.MessageCount == 0 {
+		detail.Thread.MessageCount = len(detail.Messages)
+	}
+}
+
+func inferThreadRoot(messages []MessageSummary) MessageSummary {
+	root := messages[0]
+	known := make(map[string]struct{}, len(messages))
+	for _, message := range messages {
+		known[message.MessageID] = struct{}{}
+	}
+	for _, message := range messages {
+		if message.InReplyTo == "" {
+			return message
+		}
+		if _, ok := known[message.InReplyTo]; !ok {
+			return message
+		}
+	}
+	return root
 }
 
 func canonicalMessageKey(value string) string {

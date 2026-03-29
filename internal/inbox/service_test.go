@@ -2,9 +2,11 @@ package inbox
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -314,6 +316,73 @@ func TestSyncFallsBackToFullRefreshWhenPreflightChanges(t *testing.T) {
 	}
 	if len(second.Threads) != 1 || second.Threads[0].MessageCount != 2 {
 		t.Fatalf("unexpected refreshed result after preflight change: %#v", second)
+	}
+}
+
+func TestReadStateBackfillsAuthorFromLegacyCache(t *testing.T) {
+	t.Parallel()
+
+	storePath := filepath.Join(t.TempDir(), "inbox-state.json")
+	legacy := persistedState{
+		Config: SyncOptions{
+			ListURL:     DefaultListURL,
+			MyEmails:    []string{"alice@example.com"},
+			RangeDays:   90,
+			MatchMode:   MatchModeAllRelated,
+			MaxMessages: 20,
+		},
+		SyncedAt: "2026-03-29T10:00:00Z",
+		Threads: []ThreadDetail{
+			{
+				Thread: ThreadSummary{
+					ID:         "root@example.com",
+					Subject:    "[PATCH] mm: example",
+					LatestFrom: "Reviewer <reviewer@example.com>",
+					LatestDate: "2026-03-02T11:00:00Z",
+				},
+				Messages: []MessageSummary{
+					{
+						MessageID: "root@example.com",
+						Subject:   "[PATCH] mm: example",
+						From:      "Alice Example <alice@example.com>",
+						Date:      "2026-03-01T10:00:00Z",
+						URL:       "https://lore.kernel.org/r/root@example.com",
+					},
+					{
+						MessageID: "reply@example.com",
+						Subject:   "Re: [PATCH] mm: example",
+						From:      "Reviewer <reviewer@example.com>",
+						Date:      "2026-03-02T11:00:00Z",
+						URL:       "https://lore.kernel.org/r/reply@example.com",
+						InReplyTo: "root@example.com",
+					},
+				},
+			},
+		},
+	}
+	data, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatalf("marshal legacy state: %v", err)
+	}
+	if err := os.WriteFile(storePath, data, 0o644); err != nil {
+		t.Fatalf("write legacy state: %v", err)
+	}
+
+	service := &Service{StorePath: storePath}
+	listed, err := service.ListThreads()
+	if err != nil {
+		t.Fatalf("ListThreads returned error: %v", err)
+	}
+	if listed.Threads[0].Author != "Alice Example <alice@example.com>" {
+		t.Fatalf("expected author to be backfilled, got %#v", listed.Threads[0])
+	}
+
+	detail, err := service.GetThread("root@example.com")
+	if err != nil {
+		t.Fatalf("GetThread returned error: %v", err)
+	}
+	if detail.Thread.Author != "Alice Example <alice@example.com>" {
+		t.Fatalf("expected detail author to be backfilled, got %#v", detail.Thread)
 	}
 }
 
