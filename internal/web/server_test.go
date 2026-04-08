@@ -34,6 +34,9 @@ func TestIndexRendersDefaults(t *testing.T) {
 	if !strings.Contains(recorder.Body.String(), `id="openLoreButton"`) {
 		t.Fatalf("response does not include open lore button:\n%s", recorder.Body.String())
 	}
+	if !strings.Contains(recorder.Body.String(), `id="newButton"`) {
+		t.Fatalf("response does not include new mail button:\n%s", recorder.Body.String())
+	}
 }
 
 func TestIndexRendersAutoLoadURL(t *testing.T) {
@@ -215,6 +218,94 @@ func TestLoadAndSaveFlow(t *testing.T) {
 	}
 	if !strings.Contains(string(updatedData), "updated body") {
 		t.Fatalf("draft was not overwritten:\n%s", string(updatedData))
+	}
+}
+
+func TestNewDraftFlow(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(t)
+
+	newBody := mustJSON(t, newRequest{
+		FromName:  "Alice Example",
+		FromEmail: "alice@example.com",
+	})
+
+	newRequest := httptest.NewRequest(http.MethodPost, "/api/new", bytes.NewReader(newBody))
+	newRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(newRecorder, newRequest)
+
+	if newRecorder.Code != http.StatusOK {
+		t.Fatalf("new draft request failed: %d %s", newRecorder.Code, newRecorder.Body.String())
+	}
+
+	var draft mail.Draft
+	if err := json.Unmarshal(newRecorder.Body.Bytes(), &draft); err != nil {
+		t.Fatalf("decode new draft response: %v", err)
+	}
+
+	if draft.FromName != "Alice Example" || draft.FromEmail != "alice@example.com" {
+		t.Fatalf("unexpected new draft identity: %#v", draft)
+	}
+	if draft.MessageID != "" {
+		t.Fatalf("new draft should not have message id: %#v", draft)
+	}
+	if draft.SourceURL != "" {
+		t.Fatalf("new draft should not have source url: %#v", draft)
+	}
+	if !filepath.IsAbs(draft.DraftPath) {
+		t.Fatalf("new draft path is not absolute: %q", draft.DraftPath)
+	}
+	if !strings.HasPrefix(filepath.Base(draft.DraftPath), "compose-") {
+		t.Fatalf("unexpected new draft path: %q", draft.DraftPath)
+	}
+
+	draft.To = `"Reviewer" <reviewer@example.com>`
+	draft.Cc = "list@example.com"
+	draft.Subject = "[PATCH 0/1] Example cover letter"
+	draft.Body = "A brand-new mail body"
+
+	saveRequest := httptest.NewRequest(http.MethodPost, "/api/save", bytes.NewReader(mustJSON(t, draft)))
+	saveRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(saveRecorder, saveRequest)
+
+	if saveRecorder.Code != http.StatusOK {
+		t.Fatalf("save new draft request failed: %d %s", saveRecorder.Code, saveRecorder.Body.String())
+	}
+
+	var saveResult mail.SaveResult
+	if err := json.Unmarshal(saveRecorder.Body.Bytes(), &saveResult); err != nil {
+		t.Fatalf("decode new save response: %v", err)
+	}
+	if strings.Contains(saveResult.SendCommand, "--in-reply-to") {
+		t.Fatalf("new mail send command unexpectedly replies to a message:\n%s", saveResult.SendCommand)
+	}
+
+	savedData, err := os.ReadFile(saveResult.DraftPath)
+	if err != nil {
+		t.Fatalf("read saved new draft: %v", err)
+	}
+	if !strings.Contains(string(savedData), "Subject: [PATCH 0/1] Example cover letter") {
+		t.Fatalf("saved new draft misses subject:\n%s", string(savedData))
+	}
+
+	sendRequest := httptest.NewRequest(http.MethodPost, "/api/send", bytes.NewReader(mustJSON(t, draft)))
+	sendRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(sendRecorder, sendRequest)
+
+	if sendRecorder.Code != http.StatusOK {
+		t.Fatalf("send new draft request failed: %d %s", sendRecorder.Code, sendRecorder.Body.String())
+	}
+
+	var sendResult mail.SendResult
+	if err := json.Unmarshal(sendRecorder.Body.Bytes(), &sendResult); err != nil {
+		t.Fatalf("decode new send response: %v", err)
+	}
+	if strings.Contains(sendResult.SendCommand, "--in-reply-to") {
+		t.Fatalf("new mail send unexpectedly includes reply threading:\n%s", sendResult.SendCommand)
+	}
+	if !strings.Contains(sendResult.Output, "Result: OK") {
+		t.Fatalf("send output missing success marker:\n%s", sendResult.Output)
 	}
 }
 

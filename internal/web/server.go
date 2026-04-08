@@ -32,6 +32,11 @@ type loadRequest struct {
 	ForceReload bool   `json:"force_reload"`
 }
 
+type newRequest struct {
+	FromName  string `json:"from_name"`
+	FromEmail string `json:"from_email"`
+}
+
 type errorResponse struct {
 	Error  string `json:"error"`
 	Output string `json:"output,omitempty"`
@@ -73,6 +78,7 @@ func newHandler(cfg config.Config, mailService mail.Service, inboxService *inbox
 	mux.HandleFunc("GET /api/inbox/thread", server.handleInboxThread)
 	mux.HandleFunc("POST /api/inbox/sync", server.handleInboxSync)
 	mux.HandleFunc("POST /api/load", server.handleLoad)
+	mux.HandleFunc("POST /api/new", server.handleNew)
 	mux.HandleFunc("POST /api/save", server.handleSave)
 	mux.HandleFunc("POST /api/send", server.handleSend)
 	return mux, nil
@@ -151,6 +157,25 @@ func (s *server) handleLoad(writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 		writeJSONError(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(writer, http.StatusOK, draft)
+}
+
+func (s *server) handleNew(writer http.ResponseWriter, request *http.Request) {
+	var payload newRequest
+	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+		writeJSONError(writer, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+
+	draft, err := s.mail.NewDraft(mail.NewOptions{
+		FromName:  fallback(payload.FromName, s.cfg.FromName),
+		FromEmail: fallback(payload.FromEmail, s.cfg.FromEmail),
+	})
+	if err != nil {
+		writeJSONError(writer, http.StatusInternalServerError, err.Error())
 		return
 	}
 

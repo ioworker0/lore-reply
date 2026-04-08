@@ -101,7 +101,7 @@
     }
 
     .toolbar {
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) auto auto;
       margin-bottom: 16px;
       align-items: end;
     }
@@ -1172,11 +1172,11 @@
     <section class="panel">
       <div class="header">
         <h1>lore-reply</h1>
-        <p>Load one lore patch mail, edit the reply inline, save it into <code>/tmp/lore-reply/drafts/</code>, and either copy the generated <code>git send-email</code> command or send it directly from the page.</p>
+        <p>Load one lore patch mail or start a brand-new message, edit it inline, save it into <code>/tmp/lore-reply/drafts/</code>, and either copy the generated <code>git send-email</code> command or send it directly from the page.</p>
       </div>
 
       <div class="view-switch" role="tablist" aria-label="Views">
-        <button id="directReplyTab" type="button" class="view-tab active" aria-selected="true">Direct Reply</button>
+        <button id="directReplyTab" type="button" class="view-tab active" aria-selected="true">Composer</button>
         <button id="inboxTab" type="button" class="view-tab" aria-selected="false">Inbox</button>
       </div>
 
@@ -1187,6 +1187,7 @@
             <input id="url" type="text" value="{{ .AutoLoadURL }}" placeholder="https://lore.kernel.org/linux-mm/..." autocomplete="off" spellcheck="false">
           </label>
           <button id="loadButton" type="button">Load</button>
+          <button id="newButton" type="button" class="secondary">New Mail</button>
         </div>
 
         <div id="composer" hidden>
@@ -1323,7 +1324,7 @@
             <div id="inboxThreads" class="thread-list" hidden></div>
           </div>
           <div id="inboxDetailShell" class="inbox-detail-shell">
-            <div id="inboxDetailEmpty" class="empty-state">Select a thread to inspect messages and jump into the existing reply composer.</div>
+            <div id="inboxDetailEmpty" class="empty-state">Select a thread to inspect messages and jump into the existing composer.</div>
             <div id="inboxDetail" hidden>
               <div class="thread-head">
                 <h2 id="inboxThreadSubject"></h2>
@@ -1489,6 +1490,7 @@
       bodyCloseButton: document.getElementById("bodyCloseButton"),
       messageId: document.getElementById("messageId"),
       loadButton: document.getElementById("loadButton"),
+      newButton: document.getElementById("newButton"),
       openLoreButton: document.getElementById("openLoreButton"),
       reloadButton: document.getElementById("reloadButton"),
       loadAnotherButton: document.getElementById("loadAnotherButton"),
@@ -1551,6 +1553,7 @@
 
     const state = {
       activeView: "reply",
+      composerMode: "",
       dirty: false,
       hydrating: false,
       loading: false,
@@ -1666,7 +1669,7 @@
     function setLoadedState(loaded) {
       elements.loadStage.hidden = loaded;
       elements.composer.hidden = !loaded;
-      updateOpenLoreButton();
+      updateComposerActionButtons();
     }
 
     function clearError() {
@@ -1719,11 +1722,31 @@
 
     function setBusy(busy, action) {
       elements.loadButton.disabled = busy;
-      updateOpenLoreButton();
-      elements.reloadButton.disabled = busy;
+      elements.newButton.disabled = busy;
+      updateComposerActionButtons();
       elements.loadAnotherButton.disabled = busy;
       elements.saveButton.disabled = busy;
       setStatus(busy ? action : "");
+    }
+
+    function hasLoadedDraft() {
+      return !elements.composer.hidden;
+    }
+
+    function isReplyDraft() {
+      return state.composerMode === "reply";
+    }
+
+    function hasSavableSubject() {
+      return Boolean(elements.subject.value.trim());
+    }
+
+    function canPersistCurrentDraft() {
+      return hasLoadedDraft() && Boolean((elements.draftPath.value || "").trim() || (elements.messageId.value || "").trim());
+    }
+
+    function canAutoSaveCurrentDraft() {
+      return canPersistCurrentDraft() && hasSavableSubject();
     }
 
     function currentSourceURL() {
@@ -1740,8 +1763,11 @@
       }
     }
 
-    function updateOpenLoreButton() {
-      elements.openLoreButton.disabled = !currentSourceURL() || state.loading;
+    function updateComposerActionButtons() {
+      const sourceURL = currentSourceURL();
+      const disableReplyActions = state.loading || !isReplyDraft() || !sourceURL;
+      elements.openLoreButton.disabled = disableReplyActions;
+      elements.reloadButton.disabled = disableReplyActions || state.saving || state.sendExecuting;
     }
 
     function setCopyButtonLabel(label) {
@@ -1897,7 +1923,7 @@
     }
 
     function updateAutosaveStatus() {
-      if (!elements.messageId.value) {
+      if (!hasLoadedDraft()) {
         setAutosaveStatus("");
         return;
       }
@@ -1914,12 +1940,21 @@
 
       const now = Date.now();
       if (state.dirty) {
+        if (!hasSavableSubject()) {
+          setAutosaveStatus("Unsaved changes. Add a subject to enable auto-save.");
+          return;
+        }
         const seconds = autosaveSecondsRemaining(now);
         if (state.lastAutoSaveError) {
           setAutosaveStatus(`Auto-save failed. Retry in ${seconds}s.`);
           return;
         }
         setAutosaveStatus(`Unsaved changes. Auto-save in ${seconds}s.`);
+        return;
+      }
+
+      if (!hasSavableSubject()) {
+        setAutosaveStatus("Add a subject to enable auto-save.");
         return;
       }
 
@@ -2225,7 +2260,8 @@
     function hydrateDraft(draft) {
       state.hydrating = true;
       closeResultDialog();
-      elements.url.value = draft.source_url || elements.url.value;
+      closeBodyDialog();
+      elements.url.value = draft.source_url || "";
       elements.fromName.value = draft.from_name || elements.fromName.value;
       elements.fromEmail.value = draft.from_email || elements.fromEmail.value;
       state.recipients.to = splitRecipientText(draft.to || "");
@@ -2237,6 +2273,7 @@
       elements.fullscreenBody.value = draft.body || "";
       elements.messageId.value = draft.message_id || "";
       elements.draftPath.value = draft.draft_path || "";
+      state.composerMode = draft.source_url ? "reply" : "new";
       state.hydrating = false;
       state.changeSerial = 0;
       state.lastAutoSaveAt = 0;
@@ -2245,7 +2282,7 @@
       setCopyButtonLabel("Copy Command");
       resetSendState();
       setDirty(false);
-      updateOpenLoreButton();
+      updateComposerActionButtons();
     }
 
     function currentDraft() {
@@ -2965,7 +3002,7 @@
     }
 
     function sendSaveBeacon() {
-      if (!state.dirty || !elements.messageId.value || !navigator.sendBeacon) {
+      if (!state.dirty || !canAutoSaveCurrentDraft() || !navigator.sendBeacon) {
         return;
       }
 
@@ -3001,8 +3038,37 @@
       }
     }
 
+    async function newDraft() {
+      if (state.loading || state.saving || state.sendExecuting) {
+        return;
+      }
+
+      state.loading = true;
+      clearError();
+      setBusy(true, "Creating draft...");
+      try {
+        const draft = await postJSON("/api/new", {
+          from_name: elements.fromName.value,
+          from_email: elements.fromEmail.value
+        });
+        hydrateDraft(draft);
+        setLoadedState(true);
+        setStatus("New draft ready.");
+      } catch (error) {
+        showError(String(error.message || error));
+        setStatus("");
+      } finally {
+        state.loading = false;
+        setBusy(false, "");
+      }
+    }
+
     elements.loadButton.addEventListener("click", () => {
       void loadDraft(false);
+    });
+
+    elements.newButton.addEventListener("click", () => {
+      void newDraft();
     });
 
     elements.openLoreButton.addEventListener("click", () => {
@@ -3033,7 +3099,7 @@
 
       clearError();
 
-      if (state.dirty && elements.messageId.value) {
+      if (state.dirty && canAutoSaveCurrentDraft()) {
         setBusy(true, "Saving current draft...");
         const result = await saveDraft({ interactive: false, showDialog: false });
         setBusy(false, "");
@@ -3045,6 +3111,7 @@
       closeBodyDialog();
       closeResultDialog();
       resetSendState();
+      state.composerMode = "";
       setLoadedState(false);
       setStatus("");
       window.setTimeout(() => {
@@ -3063,7 +3130,7 @@
       const busyMessage = (options && options.busyMessage) || "Saving draft...";
       const successStatus = (options && options.successStatus) || "Draft saved.";
 
-      if (state.loading || state.saving || state.sendExecuting || !elements.messageId.value) {
+      if (state.loading || state.saving || state.sendExecuting || !canPersistCurrentDraft()) {
         return null;
       }
 
@@ -3137,7 +3204,7 @@
     }
 
     function scheduleDelayedSend() {
-      if (!elements.messageId.value || state.sendExecuting) {
+      if (!canPersistCurrentDraft() || state.sendExecuting) {
         return;
       }
 
@@ -3164,7 +3231,7 @@
 
     async function executeSend(options) {
       const showDialogOnFinish = Boolean(options && options.showDialogOnFinish);
-      if (state.loading || state.saving || state.sendExecuting || !elements.messageId.value) {
+      if (state.loading || state.saving || state.sendExecuting || !canPersistCurrentDraft()) {
         return null;
       }
 
@@ -3219,7 +3286,7 @@
     }
 
     async function autoSaveDraft() {
-      if (!state.dirty || !elements.messageId.value || Date.now() < state.nextAutoSaveAt) {
+      if (!state.dirty || !canAutoSaveCurrentDraft() || Date.now() < state.nextAutoSaveAt) {
         return;
       }
 
@@ -3357,7 +3424,7 @@
     loadStoredIdentity();
     loadStoredInboxConfig();
     loadStoredBodyTheme();
-    elements.url.addEventListener("input", updateOpenLoreButton);
+    elements.url.addEventListener("input", updateComposerActionButtons);
     switchView("reply");
     setLoadedState(false);
     void refreshInboxThreads();

@@ -3,6 +3,8 @@ package mail
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +18,7 @@ import (
 	"sort"
 	"strings"
 	"text/template"
+	"time"
 	"unicode"
 )
 
@@ -45,6 +48,12 @@ type LoadOptions struct {
 	FromName    string
 	FromEmail   string
 	ForceReload bool
+}
+
+// NewOptions controls empty draft creation.
+type NewOptions struct {
+	FromName  string
+	FromEmail string
 }
 
 // SaveResult is returned after writing a draft to disk.
@@ -168,12 +177,22 @@ func (s Service) LoadDraft(ctx context.Context, opts LoadOptions) (Draft, error)
 	}, nil
 }
 
-// SaveDraft writes the current editable draft to disk and returns the send command.
-func (s Service) SaveDraft(draft Draft) (SaveResult, error) {
-	if strings.TrimSpace(draft.MessageID) == "" {
-		return SaveResult{}, errors.New("message_id is required")
+// NewDraft initializes a brand-new draft that is not tied to a lore message.
+func (s Service) NewDraft(opts NewOptions) (Draft, error) {
+	draftPath, err := buildNewDraftPath(s.DraftsDir)
+	if err != nil {
+		return Draft{}, err
 	}
 
+	return Draft{
+		FromName:  opts.FromName,
+		FromEmail: opts.FromEmail,
+		DraftPath: draftPath,
+	}, nil
+}
+
+// SaveDraft writes the current editable draft to disk and returns the send command.
+func (s Service) SaveDraft(draft Draft) (SaveResult, error) {
 	draftPath, err := s.resolveDraftPath(draft)
 	if err != nil {
 		return SaveResult{}, err
@@ -573,6 +592,24 @@ func buildDraftPath(draftsDir, messageID, subject string) string {
 	return filepath.Join(draftsDir, filename)
 }
 
+func buildNewDraftPath(draftsDir string) (string, error) {
+	if strings.TrimSpace(draftsDir) == "" {
+		return "", errors.New("drafts dir is required")
+	}
+
+	token := make([]byte, 4)
+	if _, err := rand.Read(token); err != nil {
+		return "", fmt.Errorf("generate draft token: %w", err)
+	}
+
+	filename := fmt.Sprintf(
+		"compose-%s-%s.txt",
+		time.Now().UTC().Format("20060102-150405"),
+		hex.EncodeToString(token),
+	)
+	return filepath.Join(draftsDir, filename), nil
+}
+
 func stripPatchPrefix(subject string) string {
 	subject = strings.TrimSpace(subject)
 	lower := strings.ToLower(subject)
@@ -608,7 +645,10 @@ func sanitizeSlug(value string) string {
 
 func (s Service) resolveDraftPath(draft Draft) (string, error) {
 	if strings.TrimSpace(draft.DraftPath) == "" {
-		return buildDraftPath(s.DraftsDir, draft.MessageID, draft.Subject), nil
+		if strings.TrimSpace(draft.MessageID) != "" {
+			return buildDraftPath(s.DraftsDir, draft.MessageID, draft.Subject), nil
+		}
+		return buildNewDraftPath(s.DraftsDir)
 	}
 
 	resolvedDraftsDir, err := filepath.Abs(s.DraftsDir)

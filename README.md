@@ -1,8 +1,8 @@
 # lore-reply
 
-`lore-reply` is a local single-user web tool for replying to a patch mail from `lore.kernel.org` without manually rebuilding the reply draft each time.
+`lore-reply` is a local single-user web tool for replying to a patch mail from `lore.kernel.org` or composing a brand-new plain-text patch mail without manually rebuilding the draft each time.
 
-It uses `b4` to fetch one target message, turns it into an editable plain-text reply draft, saves that draft under `/tmp/lore-reply/drafts/`, and either shows a ready-to-run `git send-email` command or sends it directly from the page.
+It uses `b4` to fetch one target message when you are replying, or starts an empty draft when you are composing a fresh mail, then saves that draft under `/tmp/lore-reply/drafts/` and either shows a ready-to-run `git send-email` command or sends it directly from the page.
 
 ## Features
 
@@ -13,6 +13,7 @@ It uses `b4` to fetch one target message, turns it into an editable plain-text r
 - Optional startup URL with automatic auto-load
 - Plain-text editor with monospace fonts and a 72-column ruler
 - Full-screen body editor for long replies
+- `New Mail` flow for composing a fresh message without loading lore first
 - Editable `From`, `To`, `Cc`, `Subject`, and `Body`
 - `To` defaults to the original sender, with the remaining audience moved to `Cc`
 - Draggable recipients between `To` and `Cc`
@@ -134,6 +135,17 @@ If you load the same lore URL again later, `lore-reply` restores the saved draft
 
 Use `Reload` in the top-right corner if you want to discard the current saved draft state and fetch a fresh copy from lore.
 
+## New Mail Workflow
+
+1. Open the `Composer` view.
+2. Click `New Mail`.
+3. Fill in `To`, optional `Cc`, `Subject`, and `Body`.
+4. Dirty drafts are auto-saved every 5 seconds after a subject is present.
+5. Click `Send Mail` to save the draft and open the send dialog.
+6. Choose `Send in 30s`, `Send Now`, or `Copy Command`.
+
+Fresh mails are saved under `/tmp/lore-reply/drafts/` with a generated `compose-...` filename and sent without `--in-reply-to`.
+
 ## Inbox Workflow
 
 1. Open the `Inbox` view.
@@ -158,7 +170,7 @@ Current behavior is replace-on-sync, not merge-on-sync. A successful new sync ov
 Saved drafts are plain-text mail files. The generated send command includes:
 
 - `--from`
-- `--in-reply-to`
+- `--in-reply-to` for reply drafts
 - one `--to` per `To` recipient
 - one `--cc` per `Cc` recipient
 - the absolute draft path

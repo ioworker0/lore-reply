@@ -64,6 +64,38 @@ func TestBuildDraftPath(t *testing.T) {
 	}
 }
 
+func TestNewDraft(t *testing.T) {
+	t.Parallel()
+
+	service := Service{
+		DraftsDir: t.TempDir(),
+	}
+
+	draft, err := service.NewDraft(NewOptions{
+		FromName:  "Alice Example",
+		FromEmail: "alice@example.com",
+	})
+	if err != nil {
+		t.Fatalf("NewDraft returned error: %v", err)
+	}
+
+	if draft.FromName != "Alice Example" || draft.FromEmail != "alice@example.com" {
+		t.Fatalf("unexpected new draft identity: %#v", draft)
+	}
+	if draft.MessageID != "" {
+		t.Fatalf("new draft should not have message id: %#v", draft)
+	}
+	if draft.SourceURL != "" {
+		t.Fatalf("new draft should not have source url: %#v", draft)
+	}
+	if !filepath.IsAbs(draft.DraftPath) {
+		t.Fatalf("new draft path is not absolute: %q", draft.DraftPath)
+	}
+	if !strings.HasPrefix(filepath.Base(draft.DraftPath), "compose-") {
+		t.Fatalf("unexpected new draft path: %q", draft.DraftPath)
+	}
+}
+
 func TestRenderDraftFile(t *testing.T) {
 	t.Parallel()
 
@@ -116,6 +148,47 @@ func TestBuildSendCommand(t *testing.T) {
 		if !strings.Contains(command, part) {
 			t.Fatalf("command missing %q:\n%s", part, command)
 		}
+	}
+}
+
+func TestSaveDraftWithoutMessageID(t *testing.T) {
+	t.Parallel()
+
+	service := Service{
+		DraftsDir: t.TempDir(),
+	}
+
+	result, err := service.SaveDraft(Draft{
+		FromName:  "Alice Example",
+		FromEmail: "alice@example.com",
+		To:        `Example Reviewer <reviewer@example.com>`,
+		Cc:        `list@example.com`,
+		Subject:   "[PATCH 0/1] Example cover letter",
+		Body:      "brand-new mail body",
+	})
+	if err != nil {
+		t.Fatalf("SaveDraft returned error: %v", err)
+	}
+
+	if !filepath.IsAbs(result.DraftPath) {
+		t.Fatalf("saved draft path is not absolute: %q", result.DraftPath)
+	}
+	if !strings.HasPrefix(filepath.Base(result.DraftPath), "compose-") {
+		t.Fatalf("unexpected saved draft path: %q", result.DraftPath)
+	}
+	if strings.Contains(result.SendCommand, "--in-reply-to") {
+		t.Fatalf("new mail send command unexpectedly contains in-reply-to:\n%s", result.SendCommand)
+	}
+	if !strings.Contains(result.SendCommand, "--to=\"reviewer@example.com\"") {
+		t.Fatalf("send command misses to recipient:\n%s", result.SendCommand)
+	}
+
+	savedData, err := os.ReadFile(result.DraftPath)
+	if err != nil {
+		t.Fatalf("read saved draft: %v", err)
+	}
+	if !strings.Contains(string(savedData), "Subject: [PATCH 0/1] Example cover letter") {
+		t.Fatalf("saved draft misses subject:\n%s", string(savedData))
 	}
 }
 
