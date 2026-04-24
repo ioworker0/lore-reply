@@ -364,15 +364,6 @@ func cleanBody(message *netmail.Message) string {
 	}
 
 	rawBody := strings.ReplaceAll(string(bodyData), "\r\n", "\n")
-	lines := strings.Split(rawBody, "\n")
-	for index, line := range lines {
-		if line == "-- " {
-			lines = lines[:index]
-			break
-		}
-	}
-	rawBody = strings.Join(lines, "\n")
-
 	decoded := []byte(rawBody)
 	if strings.Contains(strings.ToLower(message.Header.Get("Content-Transfer-Encoding")), "quoted-printable") {
 		reader := quotedprintable.NewReader(bytes.NewReader(decoded))
@@ -383,15 +374,7 @@ func cleanBody(message *netmail.Message) string {
 	}
 
 	body := strings.ReplaceAll(string(decoded), "\r\n", "\n")
-	lines = strings.Split(body, "\n")
-	for index, line := range lines {
-		if line == "-- " || line == "--" {
-			lines = lines[:index]
-			break
-		}
-	}
-
-	return strings.Join(lines, "\n")
+	return strings.TrimSuffix(body, "\n")
 }
 
 func parseSavedDraftFile(data []byte) (savedDraftContent, error) {

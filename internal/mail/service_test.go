@@ -49,8 +49,52 @@ Signature
 	if parsed.Cc != "linux-mm@kvack.org, \"Andrew Morton\" <akpm@example.com>, \"Jane Doe\" <jane@example.com>" {
 		t.Fatalf("unexpected Cc header: %q", parsed.Cc)
 	}
-	if want := ">Line one line continued\n>\n>Second line"; parsed.QuotedBody != want {
+	if want := ">Line one line continued\n>\n>Second line\n>--\n>Signature"; parsed.QuotedBody != want {
 		t.Fatalf("unexpected quoted body:\nwant:\n%q\ngot:\n%q", want, parsed.QuotedBody)
+	}
+}
+
+func TestParseMessageContentPreservesOriginalBody(t *testing.T) {
+	t.Parallel()
+
+	data := []byte(`From nobody Mon Jan 01 00:00:00 2024
+From: Example Author <author@example.com>
+To: linux-mm@kvack.org
+Subject: [PATCH v3 0/1] mm: keep changelog sections
+Message-ID: <cover@example.com>
+Date: Sun, 01 Feb 2026 09:20:35 -0500
+Content-Transfer-Encoding: 8bit
+
+Cover intro
+
+v3
+--
+- Latest change
+
+v2
+--
+- Older change
+
+Example Author (1):
+  mm: keep changelog sections
+
+-- 
+2.53.0
+`)
+
+	parsed, err := parseMessageContent(data)
+	if err != nil {
+		t.Fatalf("parseMessageContent returned error: %v", err)
+	}
+
+	if !strings.Contains(parsed.QuotedBody, ">v2\n>--\n>- Older change") {
+		t.Fatalf("quoted body lost bare double-dash changelog section:\n%s", parsed.QuotedBody)
+	}
+	if !strings.Contains(parsed.QuotedBody, ">Example Author (1):\n>  mm: keep changelog sections") {
+		t.Fatalf("quoted body lost patch summary after changelog:\n%s", parsed.QuotedBody)
+	}
+	if !strings.Contains(parsed.QuotedBody, ">-- \n>2.53.0") {
+		t.Fatalf("quoted body lost signature-style trailer:\n%s", parsed.QuotedBody)
 	}
 }
 
